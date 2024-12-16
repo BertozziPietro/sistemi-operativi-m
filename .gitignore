@@ -1,0 +1,3 @@
+#Ignora i file che ospitano output e risultati dei tests
+test-output.txt
+test-results.txt
