@@ -1,6 +1,5 @@
 // ponte_sensounico_prio project main.go -- priorità di direzione ai veicoli da NORD
 // ponte_senso_unico project main.go
-
 package main
 
 import (
@@ -11,18 +10,18 @@ import (
 
 const MAXBUFF = 100
 const MAXPROC = 100
-const MAX = 5 // capacità
+const MAX = 5
 const N int = 0
 const S int = 1
 
 var done = make(chan bool)
 var termina = make(chan bool)
-var entrataN = make(chan int, MAXBUFF) // necessità di accodamento per priorità
-var entrataS = make(chan int, MAXBUFF) // necessità di accodamento per priorità
+var entrataN = make(chan int, MAXBUFF)
+var entrataS = make(chan int, MAXBUFF)
 var uscitaN = make(chan int)
 var uscitaS = make(chan int)
-var ACK_N [MAXPROC]chan int //risposte client nord
-var ACK_S [MAXPROC]chan int //risposte client sud
+var ACK_N [MAXPROC]chan int
+var ACK_S [MAXPROC]chan int
 var r int
 
 func when(b bool, c chan int) chan int {
@@ -38,9 +37,8 @@ func veicolo(myid int, dir int) {
 	fmt.Printf("inizializzazione veicolo  %d direzione %d in secondi %d \n", myid, dir, tt)
 	time.Sleep(time.Duration(tt) * time.Second)
 	if dir == N {
-
-		entrataN <- myid // send asincrona
-		<-ACK_N[myid]    // attesa x sincronizzazione
+		entrataN <- myid
+		<-ACK_N[myid]
 		fmt.Printf("[veicolo %d]  entrato sul ponte in direzione  NORD\n", myid)
 		tt = rand.Intn(5)
 		time.Sleep(time.Duration(tt) * time.Second)
@@ -48,7 +46,7 @@ func veicolo(myid int, dir int) {
 		fmt.Printf("[veicolo %d]  uscito dal ponte in direzione  NORD\n", myid)
 	} else {
 		entrataS <- myid
-		<-ACK_S[myid] // attesa x sincronizzazione
+		<-ACK_S[myid]
 		fmt.Printf("[veicolo %d]  entrato sul ponte in direzione  SUD\n", myid)
 		tt = rand.Intn(5)
 		time.Sleep(time.Duration(tt) * time.Second)
@@ -59,62 +57,49 @@ func veicolo(myid int, dir int) {
 }
 
 func server() {
-
 	var contN int = 0
 	var contS int = 0
-
 	for {
-
 		select {
 		case x := <-when((contN < MAX) && (contS == 0), entrataN):
 			contN++
-			ACK_N[x] <- 1 // termine "call"
-
+			ACK_N[x] <- 1
 		case x := <-when((contS < MAX) && (contN == 0) && (len(entrataN) == 0), entrataS):
 			contS++
-			ACK_S[x] <- 1 // termine "call"
+			ACK_S[x] <- 1
 		case <-uscitaN:
 			contN--
 		case <-uscitaS:
 			contS--
-		case <-termina: // quando tutti i processi hanno finito
+		case <-termina:
 			fmt.Println("FINE !!!!!!")
 			done <- true
 			return
 		}
-
 	}
 }
 
 func main() {
 	var VN int
 	var VS int
-
 	fmt.Printf("\n quanti veicoli NORD (max %d)? ", MAXPROC)
 	fmt.Scanf("%d", &VN)
 	fmt.Printf("\n quanti veicoli SUD (max %d)? ", MAXPROC)
 	fmt.Scanf("%d", &VS)
-
-	//inizializzazione canali
 	for i := 0; i < VN; i++ {
 		ACK_N[i] = make(chan int, MAXBUFF)
 	}
-
-	//inizializzazione canali
 	for i := 0; i < VS; i++ {
 		ACK_S[i] = make(chan int, MAXBUFF)
 	}
-
 	rand.Seed(time.Now().Unix())
 	go server()
-
 	for i := 0; i < VS; i++ {
 		go veicolo(i, S)
 	}
 	for i := 0; i < VN; i++ {
 		go veicolo(i, N)
 	}
-
 	for i := 0; i < VN+VS; i++ {
 		<-done
 	}

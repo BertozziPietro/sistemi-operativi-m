@@ -7,12 +7,12 @@ import (
 	"time"
 )
 
-const MAXPROC = 100 //massimo numero di processi
-const MAXRES = 5    //massimo numero di risorse nel pool
+const MAXPROC = 100
+const MAXRES = 5
 
 var richiesta = make(chan int)
 var rilascio = make(chan int)
-var risorsa [MAXPROC]chan int
+var risorsa [MAXPROC] chan int
 var done = make(chan int)
 var termina = make(chan int)
 
@@ -23,24 +23,21 @@ func client(i int) {
 	timeout := rand.Intn(3)
 	time.Sleep(time.Duration(timeout) * time.Second)
 	rilascio <- r
-	done <- i //comunico al main la terminazione
+	done <- i
 }
 
 func server(nris int, nproc int) {
-
 	var disponibili int = nris
 	var res, p, i int
 	var libera [MAXRES]bool
 	var sospesi [MAXPROC]bool
 	var nsosp int = 0
-
 	for i := 0; i < nris; i++ {
 		libera[i] = true
 	}
 	for i := 0; i < nproc; i++ {
 		sospesi[i] = false
 	}
-
 	for {
 		time.Sleep(time.Second * 1)
 		fmt.Println("nuovo ciclo server")
@@ -58,30 +55,28 @@ func server(nris int, nproc int) {
 				risorsa[i] <- res
 			}
 		case p = <-richiesta:
-			if disponibili > 0 { //allocazione della risorsa
+			if disponibili > 0 {
 				for i = 0; i < nris && !libera[i]; i++ {
 				}
 				libera[i] = false
 				disponibili--
 				risorsa[p] <- i
 				fmt.Printf("[server]  allocata risorsa %d a cliente %d \n", i, p)
-			} else { // attesa
+			} else {
 				nsosp++
 				sospesi[p] = true
 				fmt.Printf("[server]  il cliente %d attende..\n", i)
 			}
-		case <-termina: // quando tutti i processi clienti hanno finito
+		case <-termina:
 			fmt.Println("FINE !!!!!!")
 			done <- 1
 			return
-
 		}
 	}
 }
 
 func main() {
 	var cli, res int
-
 	rand.Seed(time.Now().Unix())
 	fmt.Printf("\n quanti clienti (max %d)? ", MAXPROC)
 	fmt.Scanf("%d", &cli)
@@ -89,21 +84,16 @@ func main() {
 	fmt.Printf("\n quante risorse (max %d)? ", MAXRES)
 	fmt.Scanf("%d", &res)
 	fmt.Println("risorse da gestire:", res)
-
-	//inizializzazione canali
 	for i := 0; i < cli; i++ {
 		risorsa[i] = make(chan int)
 	}
-
 	for i := 0; i < cli; i++ {
 		go client(i)
 	}
 	go server(res, cli)
-
-	//attesa della terminazione dei clienti:
 	for i := 0; i < cli; i++ {
 		<-done
 	}
-	termina <- 1 //terminazione server
+	termina <- 1
 	<-done
 }
