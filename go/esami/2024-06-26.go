@@ -1,3 +1,4 @@
+/*
 package main
 
 import (
@@ -209,4 +210,80 @@ func main() {
 
 	terminaSala <- 1
 	<-done // attesa terminazione server
+}
+*/
+
+package main
+
+import (
+	"fmt"
+	"math/rand"
+	"time"
+)
+
+type req struct {
+	id  int
+	ack chan bool
+}
+
+const (
+	ORDINARIO = 0
+	SPECIALE = 1
+	
+	NUM_VISITATORI = 100
+	NUM_DIPENDENTI = 100
+	
+	MAX = 50
+	MAX_BUFF = 100
+)
+
+var (
+	entraUsciere = make(chan req, MAX_BUFF)
+	esceUsciere = make(chan req, MAX_BUFF)
+	
+	entraVisitatoreOrdinario = make(chan req, MAX_BUFF)
+	esceVisitatoreOrdinario = make(chan req, MAX_BUFF)
+	
+	entraVisitatoreSpeciale = make(chan req, MAX_BUFF)
+	esceVisitatoreSpeciale = make(chan req, MAX_BUFF)
+	
+	entraDipendente = make(chan req, MAX_BUFF)
+	esceDipendente = make(chan req, MAX_BUFF)
+	
+	finito = make(chan int, MAX_BUFF)
+	bloccaSala = make(chan int)
+	terminaSala = make(chan int)
+)
+
+func when(b bool, c chan req) chan req {
+	if !b {
+		return nil
+	}
+	return c
+}
+
+func main() {
+	fmt.Println("[MAIN] inizio")
+	
+	//inizio goroutines
+	rand.Seed(time.Now().Unix())
+	go sala()
+	go usciere(0)
+	for i := 0; i < NUM_VISITATORI; i++ {
+		go visitatore(i, i%2)
+	}
+	for i := 0; i < NUM_DIPENDENTI; i++ {
+		go dipendente(i)
+	}
+	
+	//fine goroutines
+	for i := 0; i < NUM_VISITATORI+NUM_DIPENDENTI; i++ {
+		<-finito
+	}
+	bloccaSala <- 1
+	<-finito
+	terminaSala <- 1
+	<-finito
+	
+	fmt.Println("[MAIN] fine")
 }
