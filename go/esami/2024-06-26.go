@@ -1,4 +1,3 @@
-/*
 package main
 
 import (
@@ -7,266 +6,189 @@ import (
 	"time"
 )
 
-type req struct {
-	id  int
-	ack chan bool
-	i   int
-}
+const (
+	NUM_VISITATORI = 100
+	NUM_DIPENDENTI = 100
+	
+	MAX      = 50
+	MAX_BUFF = 100
+	
+	TEMPO_MIN        = 500
+	TEMPO_INIZIO     = 500
+	TEMPO_VISITATORE = 1000
+	TEMPO_DIPENDENTE = 1000
+	TEMPO_USCIERE    = 3000
+)
 
-//costanti
-const MAX = 50
-const numVisitatori = 100
-const numDipendenti = 100
-const ORDIINARIO = 0
-const SPECIALE = 1
-const MAXBUF = 100
+var (
+	entraUsciere = make(chan chan bool, MAX_BUFF)
+	esceUsciere  = make(chan chan bool, MAX_BUFF)
 
-// canali:
-var entraUsciere = make(chan req, MAXBUF)
-var esceUsciere = make(chan bool, MAXBUF)
-var entraVisitatoreOrdinario = make(chan req, MAXBUF)
-var esceVisitatoreOrdinario = make(chan req, MAXBUF)
-var entraVisitatoreSpeciale = make(chan req, MAXBUF)
-var esceVisitatoreSpeciale = make(chan req, MAXBUF)
-var entraDipendente = make(chan req, MAXBUF)
-var esceDipendente = make(chan req, MAXBUF)
-var ackUsciere = make(chan bool, MAXBUF) //visibile ai dipendenti
-var done = make(chan int, 100)
-var termina = make(chan int)
-var terminaSala = make(chan int)
+	entraDipendente = make(chan chan bool, MAX_BUFF)
+	esceDipendente  = make(chan chan bool, MAX_BUFF)
 
-func when(b bool, c chan req) chan req {
+	entraVisitatore = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
+	esceVisitatore  = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
+
+	finito      = make(chan int, MAX_BUFF)
+	bloccaSala  = make(chan int)
+	terminaSala = make(chan int)
+)
+
+func when(b bool, c chan chan bool) chan chan bool {
 	if !b {
 		return nil
 	}
 	return c
 }
 
-func server() { //server: gestisce accessi e uscite dalla sala
-	var usciere = 0
-	var dipendenti = 0
-	var visitatori = 0
-	var chiusura = false //settata dall'usciere quando vuole chiudere la riunione (per impedire l'ingresso di nuovi dipendenti)
-	var fine = false
+func sala() {
+	fmt.Println("[SALA] inizio")
 
+	// preparazione
+	var (
+		usciere = 0
+		dipendenti = 0
+		visitatori = 0
+		
+		fine = false
+	)
+	liberi := func(aggiunti int) bool {
+ 	   return usciere + dipendenti + visitatori + aggiunti <= MAX
+	}
+
+	// comportamento
 	for {
-		fmt.Println("[Stato Sala] usciere = ", usciere, "dipendenti = ", dipendenti, ", visitatori = ", visitatori, " , fine = ", fine, ", entraUsciere = ", len(entraUsciere), ", esceUsciere = ", len(esceUsciere), ", entraDipendente = ", len(entraDipendente), ", esceDipendente = ", len(esceDipendente), ", entraVisitatoreOrdinario = ", len(entraVisitatoreOrdinario), "entraVisitatoreSpeciale = ", len(entraVisitatoreSpeciale))
+		fmt.Printf("[SALA] Usciere: %1d, Dipendenti: %03d, Visitatori: %03d, EntraU: %1d, EsceU: %1d, EntraD: %03d, EsceD: %03d, EntraVS: %03d, EsceVS: %03d, EntraVO: %03d, EsceVO: %03d\n", usciere, dipendenti, visitatori, len(entraUsciere), len(esceUsciere), len(entraDipendente), len(esceDipendente), len(entraVisitatore[0]), len(esceVisitatore[0]), len(entraVisitatore[1]), len(esceVisitatore[1]))
 		select {
-		case r := <-when(!fine && dipendenti+visitatori+usciere == 0, entraUsciere):
-			{
-				fmt.Println("[Server] l'usciere è entrato ")
-				usciere = 1
-				r.ack <- true
-			}
-		case r := <-when(usciere == 1 && dipendenti+usciere < MAX && !chiusura, entraDipendente): //il controllo della coda dell'usciere non è necessario
-			{
-				fmt.Println("[Server] è entrato il Dipendente ", r.id)
-				dipendenti++
-				r.ack <- true
-			}
-		case r := <-when(usciere == 0 && visitatori+2 <= MAX && len(entraUsciere) == 0 && len(entraDipendente) == 0, entraVisitatoreSpeciale):
-			{
-				fmt.Println("[Server] è entrato il Visitatore Speciale ", r.id)
-				visitatori += 2
-				r.ack <- true
-			}
-		case r := <-when(usciere == 0 && visitatori < MAX && len(entraUsciere) == 0 && len(entraDipendente) == 0 && len(entraVisitatoreSpeciale) == 0, entraVisitatoreOrdinario):
-			{
-				fmt.Println("[Server] è entrato il Visitatore Ordinario ", r.id)
-				visitatori++
-				r.ack <- true
-			}
-		case <-esceUsciere:
-			{
-				if dipendenti == 0 { //l'usciere può chiudere
-					fmt.Println("[Server] l'Usciere è uscito")
-					usciere = 0
-					ackUsciere <- true
-				} else { // l'usciere attende:
-					chiusura = true //l'usciere chiude la sala per impedire a nuovi dipendenti di entrare
-					//nessuna risposta: l'usciere aspetta che l'ultimo dipendente se ne vada
-					fmt.Println("[Server] l'Usciere attende che la sala si vuoti, prima di uscire ..")
-				}
-			}
-		case r := <-esceDipendente:
-			{
-				fmt.Println("[Server] esce il Dipendente ", r.id)
-				dipendenti--
-				if dipendenti == 0 { //se è l'ultimo ad uscire, sblocco l'usciere
-					usciere = 0
-					chiusura = false
-					fmt.Println("[Server] Usciere sbloccato!")
-					ackUsciere <- true
-				}
-				r.ack <- true
-			}
-		case r := <-esceVisitatoreSpeciale:
-			{
-				fmt.Println("[Server] esce il Visitatore Speciale ", r.id)
-				visitatori = visitatori - 2
-				r.ack <- true
-			}
-		case r := <-esceVisitatoreOrdinario:
-			{
-				fmt.Println("[Server] esce il Visitatore Ordinario ", r.id)
-				visitatori--
-				r.ack <- true
-			}
-		case r := <-when(fine, entraUsciere):
-			{
-				r.ack <- false
-			}
-		case <-terminaSala: //quando tutti i processi visitatori e dipendenti terminano, il server termina
-			{
-				done <- 1 //comunicazione al main: il server sta terminando
-				return
-			}
-		case <-termina: //quando tutti i processi visitatori e dipendenti terminano, il server si prepara a terminare
-			{
-				fine = true
-			}
+		case ack := <-when(!fine && visitatori == 0,
+		entraUsciere): {
+			usciere = 1
+			ack <- true
 		}
+		case ack := <-when(fine,
+		entraUsciere): {
+			ack <- false
+		}
+		case ack := <-when(dipendenti == 0,
+		esceUsciere): {
+			usciere = 0
+			ack <- true
+		}
+		case ack := <-when(usciere == 1 && len(esceUsciere) == 0 && liberi(1),
+		entraDipendente): {
+			dipendenti++
+			ack <- true
+		}
+		case ack := <-esceDipendente: {
+			dipendenti--
+			ack <- true
+		}
+		case ack := <-when(usciere == 0 && len(entraUsciere) == 0 && len(entraDipendente) == 0 && liberi(2),
+		entraVisitatore[0]): {
+			visitatori += 2
+			ack <- true
+		}
+		case ack := <-esceVisitatore[0]: {
+			visitatori -= 2
+			ack <- true
+		}
+		case ack := <-when(usciere == 0 && len(entraUsciere) == 0 && len(entraDipendente) == 0 && len(entraVisitatore[0]) == 0 && liberi(1),
+		entraVisitatore[1]): {
+			visitatori++
+			ack <- true
+		}
+		case ack := <-esceVisitatore[1]: {
+			visitatori--
+			ack <- true
+		}
+		case <-bloccaSala: {
+			fine = true
+		}
+		case <-terminaSala: {
+			finito <- 1
+			fmt.Println("[SALA] fine")
+			return
+		}}
 	}
 }
 
 func usciere(id int) {
-	var r req
-	r.id = id
-	r.ack = make(chan bool)
-	var continua bool
+	fmt.Println("[USCIERE] inizio")
+
+	// preparazione
+	var ack = make(chan bool)
+	
+	// comportamento
+	var continua bool 
 	for {
-		time.Sleep(time.Duration(rand.Intn(1000)+500) * time.Millisecond)
-		entraUsciere <- r
-		continua = <-r.ack
+		time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
+		fmt.Println("[USCIERE] mi metto in coda per entrare nella sala") 
+		entraUsciere <- ack
+		continua = <-ack
 		if !continua {
-			done <- 1
+			finito <- 1
+			fmt.Println("[USCIERE] fine")
 			return
 		}
-		time.Sleep(time.Duration(rand.Intn(3000)+500) * time.Millisecond)
-		esceUsciere <- true
-		<-ackUsciere
+		fmt.Println("[USCIERE] è il mio turno di entrare nella sala")
+		time.Sleep(time.Duration(rand.Intn(TEMPO_USCIERE)+TEMPO_MIN) * time.Millisecond)
+		fmt.Println("[USCIERE] mi metto in coda per uscire dalla sala") 
+		esceUsciere <- ack
+		<-ack
+		fmt.Println("[USCIERE] è il mio turno di uscire dalla sala")
 	}
 }
 
 func dipendente(id int) {
-	var r req
-	time.Sleep(time.Duration(rand.Intn(1000)+500) * time.Millisecond)
-	r.id = id
-	r.ack = make(chan bool)
-	entraDipendente <- r
-	<-r.ack
-	time.Sleep(time.Duration(rand.Intn(1000)+500) * time.Millisecond)
-	esceDipendente <- r
-	<-r.ack
-	done <- 1
+	time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
+	fmt.Printf("[DIPENDENTE %03d] inizio\n", id)
+	
+	// preparazione
+	var ack = make(chan bool)
+	
+	// comportamento
+	fmt.Printf("[DIPENDENTE %03d] mi metto in coda per entrare nella sala\n", id)
+	entraDipendente <- ack
+	<-ack
+	fmt.Printf("[DIPENDENTE %03d] è il mio turno di entrare nella sala\n", id)
+	time.Sleep(time.Duration(rand.Intn(TEMPO_DIPENDENTE)+TEMPO_MIN) * time.Millisecond)
+	fmt.Printf("[DIPENDENTE %03d] mi metto in coda per uscire dalla sala\n", id)
+	esceDipendente <- ack
+	<-ack
+	fmt.Printf("[DIPENDENTE %03d] è il mio turno di entrare nella sala\n", id)
+	
+	finito <- 1
+	fmt.Printf("[DIPENDENTE %03d] fine\n", id)
 }
 
 func visitatore(id int, tipo int) {
-	var r req
-	time.Sleep(time.Duration(rand.Intn(1000)+500) * time.Millisecond)
-	r.id = id
-	r.ack = make(chan bool)
-	if tipo == ORDIINARIO {
-		entraVisitatoreOrdinario <- r
-		<-r.ack
-		time.Sleep(time.Duration(rand.Intn(1000)+500) * time.Millisecond)
-		esceVisitatoreOrdinario <- r
-		<-r.ack
-	} else {
-		entraVisitatoreSpeciale <- r
-		<-r.ack
-		time.Sleep(time.Duration(rand.Intn(1000)+500) * time.Millisecond)
-		esceVisitatoreSpeciale <- r
-		<-r.ack
-	}
-	done <- 1
-}
-
-func main() {
-	rand.Seed(time.Now().Unix())
-
-	go server()
-
-	go usciere(0)
-
-	for i := 0; i < numVisitatori; i++ {
-		go visitatore(i, i%2)
-	}
-
-	for i := 0; i < numDipendenti; i++ {
-		go dipendente(i)
-	}
-	time.Sleep(time.Duration(rand.Intn(8000)+500) * time.Millisecond)
-
-	for i := 0; i < numVisitatori+numDipendenti; i++ {
-		<-done
-		//fmt.Println("[MAIN] fine processo", i)
-	}
-
-	termina <- 1
-
-	<-done
-	fmt.Println("[MAIN] fine usciere")
-
-	terminaSala <- 1
-	<-done // attesa terminazione server
-}
-*/
-
-package main
-
-import (
-	"fmt"
-	"math/rand"
-	"time"
-)
-
-type req struct {
-	id  int
-	ack chan bool
-}
-
-const (
-	ORDINARIO = 0
-	SPECIALE = 1
+	time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
+	fmt.Printf("[VISITATORE %03d] inizio\n", id)
 	
-	NUM_VISITATORI = 100
-	NUM_DIPENDENTI = 100
+	// preparazione
+	var ack = make(chan bool)
 	
-	MAX = 50
-	MAX_BUFF = 100
-)
-
-var (
-	entraUsciere = make(chan req, MAX_BUFF)
-	esceUsciere = make(chan req, MAX_BUFF)
+	// comportamento
+	fmt.Printf("[VISITATORE %03d] mi metto in coda per entrare nella sala\n", id)
+	entraVisitatore[tipo] <- ack
+	<-ack
+	fmt.Printf("[VISITATORE %03d] è il mio turno di entrare nella sala\n", id)
+	time.Sleep(time.Duration(rand.Intn(TEMPO_VISITATORE)+TEMPO_MIN) * time.Millisecond)
+	fmt.Printf("[VISITATORE %03d] mi metto in coda per uscire dalla sala\n", id)
+	esceVisitatore[tipo] <- ack
+	<-ack
+	fmt.Printf("[VISITATORE %03d] è il mio turno di entrare nella sala\n", id)
 	
-	entraVisitatoreOrdinario = make(chan req, MAX_BUFF)
-	esceVisitatoreOrdinario = make(chan req, MAX_BUFF)
-	
-	entraVisitatoreSpeciale = make(chan req, MAX_BUFF)
-	esceVisitatoreSpeciale = make(chan req, MAX_BUFF)
-	
-	entraDipendente = make(chan req, MAX_BUFF)
-	esceDipendente = make(chan req, MAX_BUFF)
-	
-	finito = make(chan int, MAX_BUFF)
-	bloccaSala = make(chan int)
-	terminaSala = make(chan int)
-)
-
-func when(b bool, c chan req) chan req {
-	if !b {
-		return nil
-	}
-	return c
+	finito <- 1
+	fmt.Printf("[VISITATORE %03d] fine\n", id)
 }
 
 func main() {
 	fmt.Println("[MAIN] inizio")
-	
-	//inizio goroutines
 	rand.Seed(time.Now().Unix())
+	
+	// inizio goroutines
 	go sala()
 	go usciere(0)
 	for i := 0; i < NUM_VISITATORI; i++ {
@@ -276,7 +198,7 @@ func main() {
 		go dipendente(i)
 	}
 	
-	//fine goroutines
+	// fine goroutines
 	for i := 0; i < NUM_VISITATORI+NUM_DIPENDENTI; i++ {
 		<-finito
 	}
