@@ -1,277 +1,235 @@
 package main
 
+//ben impostato ma qui c'è un grande problema ovvero le risorse condivise sono autonome e devi sempre usare indici ovunque
+//esempio: come faccio a sapere se non posso entrare nel tunnel da cliente... dipende quale
+
 import (
 	"fmt"
 	"math/rand"
 	"time"
 )
 
-const MAXPROC = 100 // massimo numero clienti
-const M = 2         // numero di tunnel
-const N = 5         // numero aree per la pulizia interni (PI)
-const MAX = 6       // max numero di tunnel e PI contemporaneamente usati
+type req struct {
+	id int
+	ack chan int
+}
 
-const TUNNEL = 0
-const PI = 1
+type tunnel struct {
+	addetto int
+	cliente int
+}
 
-//stati addetto 0 OUT, 1 IN, 2 EXITING
-const OUT = 0
-const IN = 1
-const EXITING = 2
+const (
+	NUM_CLIENTI = 100
+	NUM_ADDETTI = 10
+	NUM_TUNNELS  = 10
+	NUM_PI      = 30
+	
+	MAX      = 30
+	MAX_BUFF = 100
+	
+	TEMPO_MIN     = 500
+	TEMPO_INIZIO  = 500
+	TEMPO_CLIENTE  = 1000
+	TEMPO_ADDETTO = 3000
+)
 
-const DIMBUFF = 100
+var (
+	entraAddetto        = make(chan req, MAX_BUFF)
+	esceAddetto         = make(chan req, MAX_BUFF)
+	filtratoEsceAddetto = make(chan req, MAX_BUFF)
+	terminaFiltro       = make(chan chan bool)
 
-var acquisizione [2]chan int
-var rilascio [2]chan int
-var inizio_presidio = make(chan int, DIMBUFF)
-var termina_presidio = make(chan int, DIMBUFF)
-var ACK_CLI [MAXPROC]chan int //canali ack clienti
-var ACK_ADD [M]chan int       //canali ack addetti
+	entraCliente = [2]chan req{make(chan req, MAX_BUFF), make(chan req, MAX_BUFF)}
+	esceCliente  = [2]chan req{make(chan req, MAX_BUFF), make(chan req, MAX_BUFF)}
 
-var done = make(chan bool)
-var termina = make(chan bool)
-var stop = make(chan bool)
+	finito              = make(chan bool, MAX_BUFF)
+	bloccaAutolavaggio  = make(chan bool)
+	terminaAutolavaggio = make(chan bool)
+)
 
-func when(b bool, c chan int) chan int {
+func when(b bool, c chan req) chan req {
 	if !b {
 		return nil
 	}
 	return c
 }
 
-func cliente(id int) {
-	washed := false // indica se è stato eseguito il lavaggio esterno (evito che un cliente non chieda alcun servizio)
-	time.Sleep(time.Duration(rand.Intn(2)) * time.Second)
+func autolavaggio() {
+	fmt.Println("[AUTOLAVAGGIO] inizio")
 
-	if rand.Intn(2) == TUNNEL {
-		washed = true
-		// Acquisizione di un tunnel per il lavaggio carrozzeria
-		fmt.Printf("[CLIENTE %d] richiede un TUNNEL per il lavaggio della carrozzeria\n", id)
-		acquisizione[TUNNEL] <- id
-		tun := <-ACK_CLI[id]
-		fmt.Printf("[CLIENTE %d] usa il TUNNEL n. %d\n", id, tun)
-		// Lavaggio
-		time.Sleep(time.Duration(1) * time.Second)
-
-		// Rilascio tunnel
-		rilascio[TUNNEL] <- tun
-		<-ACK_CLI[id]
-		fmt.Printf("[CLIENTE %d] rilascia il TUNNEL n. %d\n", id, tun)
+	var (
+		addetti = 0
+		clientiTunnel = 0
+		clientiPI = 0
+		
+		fine = false
+	)
+	
+	var tunnels = [NUM_TUNNELS]tunnel{}
+	for i := 0; i < NUM_TUNNELS; i++ {
+		tunnels[i] = tunnel{addetto: -1, cliente: -1}
 	}
-	if rand.Intn(2) == PI || washed == false { //pulizia interni
-		// Acquisizione area di pulizia
-		fmt.Printf("[CLIENTE %d] richiede un'AREA PULIZIA INTERNI\n", id)
-		acquisizione[PI] <- id
-		area := <-ACK_CLI[id]
-		fmt.Printf("[CLIENTE %d] usa l'AREA PULIZIA INTERNI n. %d\n", id, area)
-		// pulizia auto..
-		time.Sleep(time.Duration(2) * time.Second)
-
-		// Rilascio area di pulizia
-		rilascio[PI] <- area
-		<-ACK_CLI[id]
-		fmt.Printf("[CLIENTE %d] ha rilasciato l'AREA PULIZIA INTERNI n. %d\n", id, area)
+	
+	trova := func(id int) int {
+		for i := 0; i < NUM_TUNNELS; i++ {
+			if (tunnels[i].addetto != -1 && tunnels[i].cliente == id) {
+				return i
+			}
+		}
+		return -1
 	}
-	fmt.Printf("[CLIENTE %d] ho finito e me ne vado \n", id)
-	// Terminazione
-	done <- true
-}
-
-//	ADDETTO
-
-func addetto(id int) {
-	fmt.Printf("[ADDETTO %d] creato\n", id)
+	libero := func() bool {
+ 		return clientiTunnel + clientiPI < MAX
+	}
+	
+	filtraEsceAddetto := func() {
+		for {
+		    select {
+		    case r := <-esceAddetto: {
+		        if tunnels[r.id].cliente == -1 {
+		            filtratoEsceAddetto <- r
+		        }
+		    }
+		    case ack:= <-terminaFiltro: {
+		        ack <- true
+		        return
+		    }}
+		}
+	}
+	go filtraEsceAddetto()
 
 	for {
-		// Inizia presidio del proprio tunnel
-		inizio_presidio <- id
-		fine := <-ACK_ADD[id]
-
-		if fine < 0 {
-			// Terminazione
-			fmt.Printf("[ADDETTO %d] termino\n", id)
-			done <- true
-			return
+		fmt.Printf("[AUTOLAVAGGIO] Addetti: %1d, Clienti Tunnel: %03d, Clienti PI: %03d, EntraA: %1d, EsceA: %1d, EntraCT: %03d, EsceCT: %03d, EntraCPI: %03d, EsceCPI: %03d\n", addetti, clientiTunnel, clientiPI, len(entraAddetto), len(esceAddetto), len(entraCliente[0]), len(esceCliente[0]), len(entraCliente[1]), len(esceCliente[1]))
+		select {
+		case r := <-when(!fine,
+		entraAddetto): {
+			tunnels[r.id].addetto = r.id
+			addetti++
+			r.ack <- r.id
 		}
-
-		// presidio tunnel
-		time.Sleep(time.Duration(8) * time.Second)
-
-		// Termina presidio del proprio tunnel
-		fmt.Printf("[ADDETTO %d] vuole riposarsi\n", id)
-		termina_presidio <- id
-		<-ACK_ADD[id]
-
-		// Riposo:
-		time.Sleep(time.Duration(1) * time.Second)
+		case r := <-when(fine,
+		entraAddetto): {
+			r.ack <- -1
+		}
+		case r := <-filtratoEsceAddetto: {
+			tunnels[r.id].addetto = -1
+			addetti--
+			r.ack <- r.id
+		}
+		case r := <-when(len(esceAddetto) == 0 && len(entraCliente[1]) == 0 && libero(),
+		entraCliente[0]): {
+			var id = trova(-1)
+			tunnels[id].cliente = r.id
+			clientiTunnel++
+			r.ack <- id
+		}
+		case r := <-esceCliente[0]: {
+			var id = trova(r.id)
+			tunnels[id].cliente = -1
+			clientiTunnel--
+			r.ack <- id
+		}
+		case r := <-when(libero(),
+		entraCliente[1]): {
+			clientiPI++
+			r.ack <- r.id
+		}
+		case r := <-esceCliente[1]: {
+			clientiPI--
+			r.ack <- r.id
+		}
+		case <-bloccaAutolavaggio: {
+			fine = true
+		}
+		case <-terminaAutolavaggio: {
+			var ack = make(chan bool)
+			terminaFiltro <- ack
+			<-ack
+			finito <- true
+			fmt.Println("[AUTOLAVAGGIO] fine")
+			return
+		}}
 	}
 }
 
-// AUTOLAVAGGIO
+func addetto(id int) {
+	fmt.Printf("[ADDETTO %03d] inizio\n", id)
 
-func autolavaggio() {
-	var tunnel_utilizzati = 0
-	var tunnel_disponibili = 0 // numero di tunnel con addetto presente e non impegnati da auto
-	var aree_pulizia_usate = 0
-	var stato_add [M]int  //0 OUT, 1 IN, 2 EXITING
-	var auto_in_T [M]int  //AUTO_IN_T [i]=id cliente (se tunnel i occupato), altrimenti -1
-	var auto_in_PI [N]int //AUTO_IN_PI [i]=id cliente (se PI i occupata), altrimenti -1
-	var fine = false
-
-	for i := 0; i < M; i++ {
-		stato_add[i] = OUT // inizialmente non c'è l'addetto
-		auto_in_T[i] = -1  // tunnel inizialmente libero
-	}
-	for i := 0; i < N; i++ {
-		auto_in_PI[i] = -1
-	}
-
-	for { // calcolo i tunnel disponibili nell'iterazione corrente:
-		tunnel_disponibili = 0
-		for i := 0; i < M; i++ {
-			if auto_in_T[i] == -1 && stato_add[i] == IN { //tunnel vuoto e addetto presente
-				tunnel_disponibili++
-			}
-		}
-		fmt.Printf("[AUTOLAVAGGIO] sono  disponibili  %d tunnel e %d aree PI\n", tunnel_disponibili, N-aree_pulizia_usate)
-
-		select {
-		// Acquisizione di un tunnel
-		case id := <-when(tunnel_disponibili > 0 && tunnel_utilizzati < M && tunnel_utilizzati+aree_pulizia_usate < MAX && len(acquisizione[PI]) == 0, acquisizione[TUNNEL]):
-
-			found := false
-			assegnato := -1
-			for i := 0; i < M && !found; i++ {
-				if auto_in_T[i] == -1 && stato_add[i] == IN {
-					found = true
-					assegnato = i
-				}
-			}
-			auto_in_T[assegnato] = id
-			tunnel_utilizzati++
-			fmt.Printf("[AUTOLAVAGGIO] Cliente %d acquisisce il tunnel %d\n", id, assegnato)
-			ACK_CLI[id] <- assegnato
-
-		// Acquisizione di un'area di pulizia interni
-		case id := <-when(aree_pulizia_usate < N && tunnel_utilizzati+aree_pulizia_usate < MAX, acquisizione[PI]):
-			assegnato := -1
-			found := false
-			i := 0
-			for i = 0; i < N && !found; i++ {
-				if auto_in_PI[i] == -1 {
-					found = true
-					assegnato = i
-				}
-			}
-			auto_in_PI[assegnato] = id
-			aree_pulizia_usate++
-			ACK_CLI[id] <- assegnato
-			fmt.Printf("[AUTOLAVAGGIO] Cliente %d acquisisce l'area per la pulizia interni n. %d\n", id, assegnato)
-
-		// Rilascio di un tunnel (t)
-		case t := <-rilascio[TUNNEL]:
-
-			tunnel_utilizzati--
-			id := auto_in_T[t]
-			auto_in_T[t] = -1
-			ACK_CLI[id] <- 1
-			fmt.Printf("[AUTOLAVAGGIO] Cliente %d rilascia il tunnel %d\n", id, t)
-
-			// Eventuale risveglio dell'addetto sospeso
-			if stato_add[t] == EXITING {
-				stato_add[t] = OUT
-				ACK_ADD[t] <- 1
-				fmt.Printf("[AUTOLAVAGGIO] L'addetto %d termina il presidio del tunnel %d\n", t, t)
-			}
-
-		// Rilascio di un'area di pulizia interni
-		case area := <-rilascio[PI]:
-			aree_pulizia_usate--
-			id := auto_in_PI[area]
-			auto_in_PI[area] = -1
-			ACK_CLI[id] <- 1
-			fmt.Printf("[AUTOLAVAGGIO] Cliente %d rilascia l'area di pulizia interni n. %d\n", id, area)
-
-		// Addetto inizia il presidio del proprio tunnel
-		case id := <-when(!fine, inizio_presidio):
-			stato_add[id] = IN
-			ACK_ADD[id] <- 1
-			fmt.Printf("[AUTOLAVAGGIO] L'addetto %d inizia il presidio del tunnel %d\n", id, id)
-
-		case id := <-when(fine, inizio_presidio):
-			ACK_ADD[id] <- -1
-
-		// Addetto termina il presidio del proprio tunnel
-		case id := <-termina_presidio:
-			if auto_in_T[id] == -1 { //tunnel non utilizzato
-				stato_add[id] = OUT
-				ACK_ADD[id] <- 1
-				fmt.Printf("[AUTOLAVAGGIO] L'addetto %d termina il presidio del tunnel %d\n", id, id)
-			} else { // Sospensione dell'addetto se il suo tunnel è ancora utilizzato da un cliente
-				stato_add[id] = EXITING
-				fmt.Printf("[AUTOLAVAGGIO] L'addetto %d si sospende in attesa della terminazione dell'utilizzo del tunnel %d\n", id, id)
-			}
-
-		case <-termina:
-			fine = true
-			fmt.Printf("Clienti terminati, Autolavaggio in chiusura..\n")
-
-		// Terminazione di tutte le goroutine
-		case <-stop:
-			done <- true
+	// preparazione
+	r := req{id: id, ack: make(chan int)}
+	
+	// comportamento
+	var continua int 
+	for {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
+		fmt.Println("[ADDETTO %03d] mi metto in coda per usare il tunnel", id) 
+		entraAddetto <- r
+		continua = <-r.ack
+		if continua > 0 {
+			finito <- true
+			fmt.Printf("[ADDETTO %03d] fine\n", id)
 			return
-
 		}
-
+		fmt.Println("[ADDETTO %03d] è il mio turno di usare il tunnel", id)
+		time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO)+TEMPO_MIN) * time.Millisecond)
+		fmt.Println("[ADDETTO %03d] mi metto in coda per uscire dal tunnel", id) 
+		esceAddetto <- r
+		<-r.ack
+		fmt.Println("[ADDETTO %03d] è il mio turno di uscire dal tunnel", id)
 	}
+}
 
+func cliente(id int, tipo int) {
+	time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
+	fmt.Printf("[CLIENTE %03d] inizio\n", id)
+	
+	// preparazione
+	r := req{id: id, ack: make(chan int)}
+	
+	// comportamento
+	var desideri = [2]string {"usare un tunnel", "usare un area PI"}
+	var risorsa int
+	for i := 0; i < 2; i++ {
+		if tipo == 2 || tipo == i {
+			fmt.Printf("[CLIENTE %03d] mi metto in coda per %s\n", id, desideri[i])
+			entraCliente[i] <- r
+			risorsa = <-r.ack
+			fmt.Printf("[CLIENTE %03d] è il mio turno di %s numero %03d\n", id, desideri[i], risorsa)
+			time.Sleep(time.Duration(rand.Intn(TEMPO_CLIENTE)+TEMPO_MIN) * time.Millisecond)
+			fmt.Printf("[CLIENTE %03d] mi metto in coda per %s \n", id, desideri[i])
+			esceCliente[i] <- r
+			risorsa = <-r.ack
+			fmt.Printf("[CLIENTE %03d] è il mio turno di %s numero %03d\n", id, desideri[i], risorsa)
+		}
+	}
+	finito <- true
+	fmt.Printf("[CLIENTE %03d] fine\n", id)
 }
 
 func main() {
-
-	var n_clienti int
-
-	// Inizializzazione canali
-	for i := 0; i < 2; i++ {
-		acquisizione[i] = make(chan int, DIMBUFF)
-		rilascio[i] = make(chan int, DIMBUFF)
-	}
-
-	for i := 0; i < M; i++ {
-		ACK_ADD[i] = make(chan int, DIMBUFF)
-	}
-
-	fmt.Printf("\nQuanti clienti (al massimo %d)? ", MAXPROC)
-	fmt.Scanf("%d", &n_clienti)
-
-	for i := 0; i < n_clienti; i++ {
-		ACK_CLI[i] = make(chan int, DIMBUFF)
-	}
-
+	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
-
+	
+	// inizio goroutines
 	go autolavaggio()
-	fmt.Printf("\n\n*** AUTOLAVAGGIO APERTO ***\n [ci sono %d tunnel e %d aree PI]\n\n", M, N)
-
-	for i := 0; i < M; i++ {
+	for i := 0; i < NUM_ADDETTI; i++ {
 		go addetto(i)
 	}
-
-	for i := 0; i < n_clienti; i++ {
-		go cliente(i)
+	for i := 0; i < NUM_CLIENTI; i++ {
+		go cliente(i, i % 3)
 	}
-
-	// Attesa terminazione clienti e addetti
-	for i := 0; i < n_clienti; i++ {
-		<-done
+	
+	// fine goroutines
+	for i := 0; i < NUM_CLIENTI; i++ {
+		<-finito
 	}
-	termina <- true // tutti i clienti sono terminati
-
-	for i := 0; i < M; i++ {
-		<-done
+	bloccaAutolavaggio <- true
+	for i := 0; i < NUM_ADDETTI; i++ {
+		<-finito
 	}
-	// tutti gli addetti sono terminati
-	stop <- true //termino il server
-	<-done
-	fmt.Printf("*** CHIUSURA AUTOLAVAGGIO *** \n\n")
+	terminaAutolavaggio <- true
+	<-finito
+	
+	fmt.Println("[MAIN] fine")
 }

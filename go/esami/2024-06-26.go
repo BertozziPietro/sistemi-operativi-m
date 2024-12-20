@@ -30,9 +30,9 @@ var (
 	entraVisitatore = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
 	esceVisitatore  = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
 
-	finito      = make(chan int, MAX_BUFF)
-	bloccaSala  = make(chan int)
-	terminaSala = make(chan int)
+	finito      = make(chan bool, MAX_BUFF)
+	bloccaSala  = make(chan bool)
+	terminaSala = make(chan bool)
 )
 
 func when(b bool, c chan chan bool) chan chan bool {
@@ -45,7 +45,6 @@ func when(b bool, c chan chan bool) chan chan bool {
 func sala() {
 	fmt.Println("[SALA] inizio")
 
-	// preparazione
 	var (
 		usciere = 0
 		dipendenti = 0
@@ -53,11 +52,11 @@ func sala() {
 		
 		fine = false
 	)
+	
 	liberi := func(aggiunti int) bool {
- 	   return usciere + dipendenti + visitatori + aggiunti <= MAX
+ 		return usciere + dipendenti + visitatori + aggiunti <= MAX
 	}
 
-	// comportamento
 	for {
 		fmt.Printf("[SALA] Usciere: %1d, Dipendenti: %03d, Visitatori: %03d, EntraU: %1d, EsceU: %1d, EntraD: %03d, EsceD: %03d, EntraVS: %03d, EsceVS: %03d, EntraVO: %03d, EsceVO: %03d\n", usciere, dipendenti, visitatori, len(entraUsciere), len(esceUsciere), len(entraDipendente), len(esceDipendente), len(entraVisitatore[0]), len(esceVisitatore[0]), len(entraVisitatore[1]), len(esceVisitatore[1]))
 		select {
@@ -106,7 +105,7 @@ func sala() {
 			fine = true
 		}
 		case <-terminaSala: {
-			finito <- 1
+			finito <- true
 			fmt.Println("[SALA] fine")
 			return
 		}}
@@ -127,7 +126,7 @@ func usciere(id int) {
 		entraUsciere <- ack
 		continua = <-ack
 		if !continua {
-			finito <- 1
+			finito <- true
 			fmt.Println("[USCIERE] fine")
 			return
 		}
@@ -158,7 +157,7 @@ func dipendente(id int) {
 	<-ack
 	fmt.Printf("[DIPENDENTE %03d] è il mio turno di entrare nella sala\n", id)
 	
-	finito <- 1
+	finito <- true
 	fmt.Printf("[DIPENDENTE %03d] fine\n", id)
 }
 
@@ -180,7 +179,7 @@ func visitatore(id int, tipo int) {
 	<-ack
 	fmt.Printf("[VISITATORE %03d] è il mio turno di entrare nella sala\n", id)
 	
-	finito <- 1
+	finito <- true
 	fmt.Printf("[VISITATORE %03d] fine\n", id)
 }
 
@@ -202,9 +201,9 @@ func main() {
 	for i := 0; i < NUM_VISITATORI+NUM_DIPENDENTI; i++ {
 		<-finito
 	}
-	bloccaSala <- 1
+	bloccaSala <- true
 	<-finito
-	terminaSala <- 1
+	terminaSala <- true
 	<-finito
 	
 	fmt.Println("[MAIN] fine")
