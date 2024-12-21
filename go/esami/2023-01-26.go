@@ -4,67 +4,95 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
 const (
-	NUM_CITTADINI = 90
-	
 	M1       = 10
 	M2       = 20
 	N 		 = 30
 	MAX_BUFF = 50
+
+	NUM_CITTADINI = 90
 	
-	TEMPO_MIN       = 200
-	TEMPO_INIZIO    = 200
-	TEMPO_CITTADINO = 500
+	TEMPO_MINIMO    = 200
 	TEMPO_ADDETTO   = 1000
+	TEMPO_CITTADINO = 500
+	
+	AZIONI_ADDETTO   = 2
+	AZIONI_CITTADINO = 2
+	
+	TIPI_CITTADINO = 2
 )
 
 var (
-	entraAddetto = make(chan chan bool, MAX_BUFF)
-	esceAddetto  = make(chan chan bool, MAX_BUFF)
-
-	entraCittadino = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
-	esceCittadino  = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
-
+	canaliAddetto   = [AZIONI_ADDETTO]chan chan bool{
+					make(chan chan bool),
+					make(chan chan bool)}		
+	canaliCittadino = [TIPI_CITTADINO][AZIONI_CITTADINO]chan chan bool{
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
+					
 	finito           = make(chan bool, MAX_BUFF)
 	bloccaCasaAcqua  = make(chan bool)
 	terminaCasaAcqua = make(chan bool)
 )
 
-func when(b bool, c chan chan bool) chan chan bool {
-	if !b {
-		return nil
+func lunghezzeCanaliInVettore(canali []chan chan bool) []int {
+	lunghezze := make([]int, len(canali))
+	for i, c := range canali { lunghezze[i] = len(c) }
+	return lunghezze
+}
+
+func lunghezzeCanaliInMatrice(canali [][]chan chan bool) [][]int {
+	lunghezze := make([][]int, len(canali))
+	for i, riga := range canali {
+		lunghezze[i] = make([]int, len(riga))
+		for j, c := range riga { lunghezze[i][j] = len(c) }
 	}
+	return lunghezze
+}
+
+func when(b bool, c chan chan bool) chan chan bool {
+	if !b { return nil }
 	return c
 }
 
 func casaAcqua() {
-	fmt.Println("[CASA_ACQUA] inizio")
+	const nome = "CASA_ACQUA"
+	var spazi = strings.Repeat(" ", len(nome)+3)
+	fmt.Printf("[%s] inizio", nome)
 
 	var (
 		monetine = 0
 		monetone = 0
 		litri = N
-		
 		dentro = 0
-		
 		fine = false
 	)
 	
-	piena := func() bool {
- 		return monetine == M1 || monetone == M2
+	intervento := func() bool {
+ 		return monetine == M1 || monetone == M2 || litri == 0
 	}
-	vuoto := func() bool {
- 		return litri == 0
+	
+	priorità := func(canali ...chan chan bool) bool {
+		for _, c := range canali { if len(c) > 0 { return false } }
+		return true
 	}
 
 	for {
-		fmt.Printf("[CASA_ACQUA] Monetine: %03d, Monetone: %03d, Litri: %03d, Dentro: %03d, Fine: %5t, EntraA: %1d, EsceA: %1d, EntraCP: %03d, EsceCP: %03d, EntraCG: %03d, EsceCG: %03d\n", monetine, monetone, litri, dentro, fine, len(entraAddetto), len(esceAddetto), len(entraCittadino[0]), len(esceCittadino[0]), len(entraCittadino[1]), len(esceCittadino[1]))
+		var canaliCittadinoSlice = make([][]chan chan bool, len(canaliCittadino))
+		for i, row := range canaliCittadino { canaliCittadinoSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var (
+			lunghezzeAddetto   = lunghezzeCanaliInVettore(canaliAddetto[:])
+			lunghezzeCittadino = lunghezzeCanaliInMatrice(canaliCittadinoSlice)
+		)
+		fmt.Printf("[%s] Monetine: %03d, Monetone: %03d, Litri: %03d, Dentro: %03d, Fine: %5t\n%sCanaliAddetto: %v, CanaliCittadino: %v\n",
+    nome, monetine, monetone, litri, dentro, fine, spazi, lunghezzeAddetto, lunghezzeCittadino)
 		
 		select {
-		case ack := <-when(!fine && dentro == 0 && (piena() || vuoto()),
-		entraAddetto): {
+		case ack := <-when(!fine && dentro == 0 && intervento(),
+		canaliAddetto[0]): {
 			monetine = 0
 			monetone = 0
 			litri = N
@@ -72,32 +100,33 @@ func casaAcqua() {
 			ack <- true
 		}
 		case ack := <-when(fine,
-		entraAddetto): {
+		canaliAddetto[0]): {
 			ack <- false
 		}
-		case ack := <-esceAddetto: {
+		case ack := <-canaliAddetto[1]: {
 			dentro = 0
 			ack <- true
 		}
-		case ack := <-when(dentro == 0 && !(piena() || vuoto()),
-		entraCittadino[0]): {
+		case ack := <-when(dentro == 0 && !intervento(),
+		canaliCittadino[0][0]): {
 			monetine++
 			litri--
 			dentro = 1
 			ack <- true
 		}
-		case ack := <-esceCittadino[0]: {
+		case ack := <-canaliCittadino[0][1]: {
 			dentro = 0
 			ack <- true
 		}
-		case ack := <-when(dentro == 0 && !(piena() || vuoto()) && len(entraCittadino[0]) == 0,
-		entraCittadino[1]): {
+		case ack := <-when(dentro == 0 && !intervento() &&
+		priorità(canaliCittadino[0][0]),
+		canaliCittadino[1][0]): {
 			monetone++
 			litri -= 2
 			dentro = 1
 			ack <- true
 		}
-		case ack := <-esceCittadino[1]: {
+		case ack := <-canaliCittadino[1][1]: {
 			dentro = 0
 			ack <- true
 		}
@@ -106,59 +135,55 @@ func casaAcqua() {
 		}
 		case <-terminaCasaAcqua: {
 			finito <- true
-			fmt.Println("[CASA_ACQUA] fine")
+			fmt.Printf("[%s] fine", nome)
 			return
 		}}
 	}
 }
 
 func addetto(id int) {
-	fmt.Println("[ADDETTO] inizio")
-
-	// preparazione
-	var ack = make(chan bool)
+	const nome = "ADDETTO"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
-	// comportamento
-	var continua bool 
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_ADDETTO]string {"entrare nella casa dell'acqua", "uscire dalla casa dell'acqua"}
+		continua bool
+	)
 	for {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
-		fmt.Println("[ADDETTO] mi metto in coda per entrare nella casa dell'acqua") 
-		entraAddetto <- ack
-		continua = <-ack
-		if !continua {
-			finito <- true
-			fmt.Println("[ADDETTO] fine")
-			return
+		for i, azione := range azioni {
+			time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO)+TEMPO_MINIMO) * time.Millisecond)
+			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+			canaliAddetto[i] <- ack
+			continua = <-ack
+			if !continua {
+				finito <- true
+				fmt.Printf("[%s %03d] fine\n", nome, id)
+				return
+			}
+			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 		}
-		fmt.Println("[ADDETTO] è il mio turno di entrare nella casa dell'acqua")
-		time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO)+TEMPO_MIN) * time.Millisecond)
-		fmt.Println("[ADDETTO] mi metto in coda per entrare nella casa dell'acqua") 
-		esceAddetto <- ack
-		<-ack
-		fmt.Println("[ADDETTO] è il mio turno di entrare nella casa dell'acqua")
 	}
 }
 
 func cittadino(id int, tipo int) {
-	time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
-	fmt.Printf("[CITTADINO %03d] inizio\n", id)
+	const nome = "CITTADINO"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
-	// preparazione
-	var ack = make(chan bool)
-	
-	// comportamento
-	fmt.Printf("[CITTADINO %03d] mi metto in coda per entrare nella casa dell'acqua\n", id)
-	entraCittadino[tipo] <- ack
-	<-ack
-	fmt.Printf("[CITTADINO %03d] è il mio turno di entrare nella casa dell'acqua\n", id)
-	time.Sleep(time.Duration(rand.Intn(TEMPO_CITTADINO)+TEMPO_MIN) * time.Millisecond)
-	fmt.Printf("[CITTADINO %03d] mi metto in coda per entrare nella casa dell'acqua\n", id)
-	esceCittadino[tipo] <- ack
-	<-ack
-	fmt.Printf("[CITTADINO %03d] è il mio turno di entrare nella casa dell'acqua\n", id)
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_ADDETTO]string {"entrare nella casa dell'acqua", "uscire dalla casa dell'acqua"}
+	)
+	for i, azione := range azioni {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_CITTADINO)+TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+		canaliCittadino[tipo][i] <- ack
+		<-ack
+		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+	}
 	
 	finito <- true
-	fmt.Printf("[CITTADINO %03d] fine\n", id)
+	fmt.Printf("[%s %03d] fine\n", nome, id)
 }
 
 func main() {
@@ -169,14 +194,12 @@ func main() {
 		if i%3 == 0 { return 1 } else { return 0 }
 	}
 	
-	// inizio goroutines
 	go casaAcqua()
 	go addetto(0)
 	for i := 0; i < NUM_CITTADINI; i++ {
 		go cittadino(i, ruotaTipo(i))
 	}
 	
-	// fine goroutines
 	for i := 0; i < NUM_CITTADINI; i++ {
 		<-finito
 	}
