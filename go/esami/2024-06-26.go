@@ -59,6 +59,7 @@ func sala() {
 
 	for {
 		fmt.Printf("[SALA] Usciere: %1d, Dipendenti: %03d, Visitatori: %03d, EntraU: %1d, EsceU: %1d, EntraD: %03d, EsceD: %03d, EntraVS: %03d, EsceVS: %03d, EntraVO: %03d, EsceVO: %03d\n", usciere, dipendenti, visitatori, len(entraUsciere), len(esceUsciere), len(entraDipendente), len(esceDipendente), len(entraVisitatore[0]), len(esceVisitatore[0]), len(entraVisitatore[1]), len(esceVisitatore[1]))
+		
 		select {
 		case ack := <-when(!fine && visitatori == 0,
 		entraUsciere): {
