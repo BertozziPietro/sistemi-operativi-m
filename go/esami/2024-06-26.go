@@ -4,36 +4,60 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
 const (
-	NUM_VISITATORI = 100
-	NUM_DIPENDENTI = 100
-	
 	MAX      = 50
 	MAX_BUFF = 100
+
+	NUM_DIPENDENTI = 100
+	NUM_VISITATORI = 100
 	
-	TEMPO_MIN        = 500
-	TEMPO_INIZIO     = 500
-	TEMPO_VISITATORE = 1000
-	TEMPO_DIPENDENTE = 1000
+	TEMPO_MINIMO     = 500
 	TEMPO_USCIERE    = 3000
+	TEMPO_DIPENDENTE = 1000
+	TEMPO_VISITATORE = 1000
+	
+	AZIONI_USCIERE    = 2
+	AZIONI_DIPENDENTE = 2
+	AZIONI_VISITATORE = 2
+	
+	TIPI_VISITATORI = 2
 )
 
 var (
-	entraUsciere = make(chan chan bool, MAX_BUFF)
-	esceUsciere  = make(chan chan bool, MAX_BUFF)
+	canaliUsciere    = [AZIONI_USCIERE]chan chan bool{
+					 make(chan chan bool),
+					 make(chan chan bool)}	
 
-	entraDipendente = make(chan chan bool, MAX_BUFF)
-	esceDipendente  = make(chan chan bool, MAX_BUFF)
-
-	entraVisitatore = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
-	esceVisitatore  = [2]chan chan bool{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}
+	canaliDipendente = [AZIONI_DIPENDENTE]chan chan bool{
+					 make(chan chan bool),
+					 make(chan chan bool)}
+					 
+	canaliVisitatore = [TIPI_VISITATORI][AZIONI_VISITATORE]chan chan bool{
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 
 	finito      = make(chan bool, MAX_BUFF)
 	bloccaSala  = make(chan bool)
 	terminaSala = make(chan bool)
 )
+
+func lunghezzeCanaliInVettore(canali []chan chan bool) []int {
+	lunghezze := make([]int, len(canali))
+	for i, c := range canali { lunghezze[i] = len(c) }
+	return lunghezze
+}
+
+func lunghezzeCanaliInMatrice(canali [][]chan chan bool) [][]int {
+	lunghezze := make([][]int, len(canali))
+	for i, riga := range canali {
+		lunghezze[i] = make([]int, len(riga))
+		for j, c := range riga { lunghezze[i][j] = len(c) }
+	}
+	return lunghezze
+}
 
 func when(b bool, c chan chan bool) chan chan bool {
 	if !b {
@@ -43,62 +67,79 @@ func when(b bool, c chan chan bool) chan chan bool {
 }
 
 func sala() {
-	fmt.Println("[SALA] inizio")
+	const nome = "SALA"
+	var spazi = strings.Repeat(" ", len(nome)+3)
+	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
 		usciere = 0
 		dipendenti = 0
 		visitatori = 0
-		
 		fine = false
 	)
 	
 	liberi := func(aggiunti int) bool {
  		return usciere + dipendenti + visitatori + aggiunti <= MAX
 	}
+	
+	priorità := func(canali ...chan chan bool) bool {
+		for _, c := range canali { if len(c) > 0 { return false } }
+		return true
+	}
 
 	for {
-		fmt.Printf("[SALA] Usciere: %1d, Dipendenti: %03d, Visitatori: %03d, EntraU: %1d, EsceU: %1d, EntraD: %03d, EsceD: %03d, EntraVS: %03d, EsceVS: %03d, EntraVO: %03d, EsceVO: %03d\n", usciere, dipendenti, visitatori, len(entraUsciere), len(esceUsciere), len(entraDipendente), len(esceDipendente), len(entraVisitatore[0]), len(esceVisitatore[0]), len(entraVisitatore[1]), len(esceVisitatore[1]))
+		var canaliVisitatoriSlice = make([][]chan chan bool, len(canaliVisitatore))
+		for i, row := range canaliVisitatore { canaliVisitatoriSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var (
+			lunghezzeUsciere    = lunghezzeCanaliInVettore(canaliUsciere[:])
+			lunghezzeDipendente = lunghezzeCanaliInVettore(canaliDipendente[:])
+			lunghezzeVisitatore = lunghezzeCanaliInMatrice(canaliVisitatoriSlice)
+		)
+		fmt.Printf("[%s] Usciere: %03d, Dipendenti: %03d, Visitatori: %03d, Fine: %5t\n%sCanaliUsciere: %v, CanaliDipendenti: %v, CanaliVisitatori: %v\n",
+		nome, usciere, dipendenti, visitatori, fine, spazi, lunghezzeUsciere, lunghezzeDipendente, lunghezzeVisitatore)
 		
 		select {
 		case ack := <-when(!fine && visitatori == 0,
-		entraUsciere): {
+		canaliUsciere[0]): {
 			usciere = 1
 			ack <- true
 		}
 		case ack := <-when(fine,
-		entraUsciere): {
+		canaliUsciere[0]): {
 			ack <- false
 		}
 		case ack := <-when(dipendenti == 0,
-		esceUsciere): {
+		canaliUsciere[1]): {
 			usciere = 0
 			ack <- true
 		}
-		case ack := <-when(usciere == 1 && len(esceUsciere) == 0 && liberi(1),
-		entraDipendente): {
+		case ack := <-when(usciere == 1 && liberi(1) &&
+		priorità(canaliUsciere[1]),
+		canaliDipendente[0]): {
 			dipendenti++
 			ack <- true
 		}
-		case ack := <-esceDipendente: {
+		case ack := <-canaliDipendente[1]: {
 			dipendenti--
 			ack <- true
 		}
-		case ack := <-when(usciere == 0 && len(entraUsciere) == 0 && len(entraDipendente) == 0 && liberi(2),
-		entraVisitatore[0]): {
+		case ack := <-when(usciere == 0 && liberi(2) &&
+		priorità(canaliUsciere[1], canaliDipendente[1]),
+		canaliVisitatore[0][0]): {
 			visitatori += 2
 			ack <- true
 		}
-		case ack := <-esceVisitatore[0]: {
+		case ack := <-canaliVisitatore[0][1]: {
 			visitatori -= 2
 			ack <- true
 		}
-		case ack := <-when(usciere == 0 && len(entraUsciere) == 0 && len(entraDipendente) == 0 && len(entraVisitatore[0]) == 0 && liberi(1),
-		entraVisitatore[1]): {
+		case ack := <-when(usciere == 0 && liberi(1) &&
+		priorità(canaliUsciere[0], canaliDipendente[0], canaliVisitatore[0][0]),
+		canaliVisitatore[1][0]): {
 			visitatori++
 			ack <- true
 		}
-		case ack := <-esceVisitatore[1]: {
+		case ack := <-canaliVisitatore[1][1]: {
 			visitatori--
 			ack <- true
 		}
@@ -107,99 +148,91 @@ func sala() {
 		}
 		case <-terminaSala: {
 			finito <- true
-			fmt.Println("[SALA] fine")
+			fmt.Printf("[%s] fine\n", nome)
 			return
 		}}
 	}
 }
 
 func usciere(id int) {
-	fmt.Println("[USCIERE] inizio")
+	const nome = "USCIERE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
 
-	// preparazione
-	var ack = make(chan bool)
-	
-	// comportamento
-	var continua bool 
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_USCIERE]string {"per entrare nella sala", "uscire dalla sala"}
+		continua bool
+	)
 	for {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
-		fmt.Println("[USCIERE] mi metto in coda per entrare nella sala") 
-		entraUsciere <- ack
-		continua = <-ack
-		if !continua {
-			finito <- true
-			fmt.Println("[USCIERE] fine")
-			return
+		for i, azione := range azioni {
+			time.Sleep(time.Duration(rand.Intn(TEMPO_USCIERE)+TEMPO_MINIMO) * time.Millisecond)
+			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+			canaliUsciere[i] <- ack
+			continua = <-ack
+			if !continua {
+				finito <- true
+				fmt.Printf("[%s %03d] fine\n", nome, id)
+				return
+			}
+			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 		}
-		fmt.Println("[USCIERE] è il mio turno di entrare nella sala")
-		time.Sleep(time.Duration(rand.Intn(TEMPO_USCIERE)+TEMPO_MIN) * time.Millisecond)
-		fmt.Println("[USCIERE] mi metto in coda per uscire dalla sala") 
-		esceUsciere <- ack
-		<-ack
-		fmt.Println("[USCIERE] è il mio turno di uscire dalla sala")
 	}
 }
 
 func dipendente(id int) {
-	time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
-	fmt.Printf("[DIPENDENTE %03d] inizio\n", id)
+	const nome = "DIPENDENTE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
-	// preparazione
-	var ack = make(chan bool)
-	
-	// comportamento
-	fmt.Printf("[DIPENDENTE %03d] mi metto in coda per entrare nella sala\n", id)
-	entraDipendente <- ack
-	<-ack
-	fmt.Printf("[DIPENDENTE %03d] è il mio turno di entrare nella sala\n", id)
-	time.Sleep(time.Duration(rand.Intn(TEMPO_DIPENDENTE)+TEMPO_MIN) * time.Millisecond)
-	fmt.Printf("[DIPENDENTE %03d] mi metto in coda per uscire dalla sala\n", id)
-	esceDipendente <- ack
-	<-ack
-	fmt.Printf("[DIPENDENTE %03d] è il mio turno di entrare nella sala\n", id)
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_DIPENDENTE]string {"per entrare nella sala", "uscire dalla sala"}
+	)
+	for i, azione := range azioni {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_DIPENDENTE)+TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+		canaliDipendente[i] <- ack
+		<-ack
+		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+	}
 	
 	finito <- true
-	fmt.Printf("[DIPENDENTE %03d] fine\n", id)
+	fmt.Printf("[%s %03d] fine\n", nome, id)
 }
 
 func visitatore(id int, tipo int) {
-	time.Sleep(time.Duration(rand.Intn(TEMPO_INIZIO)+TEMPO_MIN) * time.Millisecond)
-	fmt.Printf("[VISITATORE %03d] inizio\n", id)
+	const nome = "VISITATORE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
-	// preparazione
-	var ack = make(chan bool)
-	
-	// comportamento
-	fmt.Printf("[VISITATORE %03d] mi metto in coda per entrare nella sala\n", id)
-	entraVisitatore[tipo] <- ack
-	<-ack
-	fmt.Printf("[VISITATORE %03d] è il mio turno di entrare nella sala\n", id)
-	time.Sleep(time.Duration(rand.Intn(TEMPO_VISITATORE)+TEMPO_MIN) * time.Millisecond)
-	fmt.Printf("[VISITATORE %03d] mi metto in coda per uscire dalla sala\n", id)
-	esceVisitatore[tipo] <- ack
-	<-ack
-	fmt.Printf("[VISITATORE %03d] è il mio turno di entrare nella sala\n", id)
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_VISITATORE]string {"per entrare nella sala", "uscire dalla sala"}
+	)
+	for i, azione := range azioni {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_VISITATORE)+TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+		canaliVisitatore[tipo][i] <- ack
+		<-ack
+		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+	}
 	
 	finito <- true
-	fmt.Printf("[VISITATORE %03d] fine\n", id)
+	fmt.Printf("[%s %03d] fine\n", nome, id)
 }
 
 func main() {
 	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
 	
-	// inizio goroutines
 	go sala()
 	go usciere(0)
-	for i := 0; i < NUM_VISITATORI; i++ {
-		go visitatore(i, i%2)
-	}
 	for i := 0; i < NUM_DIPENDENTI; i++ {
 		go dipendente(i)
 	}
+	for i := 0; i < NUM_VISITATORI; i++ {
+		go visitatore(i, i%2)
+	}
 	
-	// fine goroutines
-	for i := 0; i < NUM_VISITATORI+NUM_DIPENDENTI; i++ {
+	for i := 0; i < NUM_DIPENDENTI+NUM_VISITATORI; i++ {
 		<-finito
 	}
 	bloccaSala <- true

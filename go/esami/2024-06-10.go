@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
 type req struct {

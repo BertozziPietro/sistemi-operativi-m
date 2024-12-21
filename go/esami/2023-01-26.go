@@ -61,7 +61,7 @@ func when(b bool, c chan chan bool) chan chan bool {
 func casaAcqua() {
 	const nome = "CASA_ACQUA"
 	var spazi = strings.Repeat(" ", len(nome)+3)
-	fmt.Printf("[%s] inizio", nome)
+	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
 		monetine = 0
@@ -88,7 +88,7 @@ func casaAcqua() {
 			lunghezzeCittadino = lunghezzeCanaliInMatrice(canaliCittadinoSlice)
 		)
 		fmt.Printf("[%s] Monetine: %03d, Monetone: %03d, Litri: %03d, Dentro: %03d, Fine: %5t\n%sCanaliAddetto: %v, CanaliCittadino: %v\n",
-    nome, monetine, monetone, litri, dentro, fine, spazi, lunghezzeAddetto, lunghezzeCittadino)
+		nome, monetine, monetone, litri, dentro, fine, spazi, lunghezzeAddetto, lunghezzeCittadino)
 		
 		select {
 		case ack := <-when(!fine && dentro == 0 && intervento(),
@@ -135,7 +135,7 @@ func casaAcqua() {
 		}
 		case <-terminaCasaAcqua: {
 			finito <- true
-			fmt.Printf("[%s] fine", nome)
+			fmt.Printf("[%s] fine\n", nome)
 			return
 		}}
 	}

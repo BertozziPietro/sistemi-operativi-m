@@ -24,7 +24,7 @@ const (
 	TEMPO_AUTO       = 1000
 	
 	AZIONI_SPAZZANEVE = 4
-	AZIONI_CAMPER	  = 4
+	AZIONI_CAMPER     = 4
 	AZIONI_AUTO       = 4
 )
 
@@ -88,8 +88,8 @@ func strada() {
 	for {
 		var (
 			lunghezzeSpazaneve = lunghezze(canaliSpazzaneve[:])
-			lunghezzeCamper = lunghezze(canaliCamper[:])
-			lunghezzeAuto = lunghezze(canaliAuto[:])
+			lunghezzeCamper    = lunghezze(canaliCamper[:])
+			lunghezzeAuto      = lunghezze(canaliAuto[:])
 		)
 		fmt.Printf("[%s] LiberiM: %03d, LiberiS: %03d, Spazzaneve: %5t, Camper: %03d, Auto: %03d, Direzione: %03d, Fine: %5t\n%sCanaliSpazzaneve: %v, CanaliCamper: %v, CanaliAuto: %v\n",
 		nome, liberiM, liberiS, spazzaneve, camper, auto, direzione, fine, spazi, lunghezzeSpazaneve, lunghezzeCamper, lunghezzeAuto)
@@ -239,7 +239,7 @@ func auto(id int) {
 }
 
 func main() {
-	fmt.Println("[STRADA] inizio")
+	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
 	
 	go strada()
@@ -259,5 +259,5 @@ func main() {
 	terminaStrada <- true
 	<-finito
 	
-	fmt.Println("[STRADA] fine")
+	fmt.Println("[MAIN] fine")
 }
