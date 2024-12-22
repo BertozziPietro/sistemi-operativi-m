@@ -28,7 +28,8 @@ const (
 var (
 	canaliAddetto   = [AZIONI_ADDETTO]chan chan bool{
 					make(chan chan bool),
-					make(chan chan bool)}		
+					make(chan chan bool)}
+						
 	canaliCittadino = [TIPI_CITTADINO][AZIONI_CITTADINO]chan chan bool{
 					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
 					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
@@ -58,9 +59,14 @@ func when(b bool, c chan chan bool) chan chan bool {
 	return c
 }
 
+func priorità(canali ...chan chan bool) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
+}
+
 func casaAcqua() {
 	const nome = "CASA_ACQUA"
-	var spazi = strings.Repeat(" ", len(nome)+3)
+	var spazi = strings.Repeat(" ", len(nome) + 3)
 	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
@@ -71,14 +77,7 @@ func casaAcqua() {
 		fine = false
 	)
 	
-	intervento := func() bool {
- 		return monetine == M1 || monetone == M2 || litri == 0
-	}
-	
-	priorità := func(canali ...chan chan bool) bool {
-		for _, c := range canali { if len(c) > 0 { return false } }
-		return true
-	}
+	intervento := func() bool { return monetine == M1 || monetone == M2 || litri == 0 }
 
 	for {
 		var canaliCittadinoSlice = make([][]chan chan bool, len(canaliCittadino))
@@ -152,7 +151,7 @@ func addetto(id int) {
 	)
 	for {
 		for i, azione := range azioni {
-			time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO)+TEMPO_MINIMO) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO) + TEMPO_MINIMO) * time.Millisecond)
 			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 			canaliAddetto[i] <- ack
 			continua = <-ack
@@ -175,7 +174,7 @@ func cittadino(id int, tipo int) {
 		azioni = [AZIONI_ADDETTO]string {"entrare nella casa dell'acqua", "uscire dalla casa dell'acqua"}
 	)
 	for i, azione := range azioni {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_CITTADINO)+TEMPO_MINIMO) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(TEMPO_CITTADINO) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliCittadino[tipo][i] <- ack
 		<-ack
@@ -190,19 +189,13 @@ func main() {
 	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
 	
-	ruotaTipo := func(i int) int {
-		if i%3 == 0 { return 1 } else { return 0 }
-	}
+	ruotaTipo := func(i int) int { if i%3 == 0 { return 1 } else { return 0 } }
 	
 	go casaAcqua()
 	go addetto(0)
-	for i := 0; i < NUM_CITTADINI; i++ {
-		go cittadino(i, ruotaTipo(i))
-	}
+	for i := 0; i < NUM_CITTADINI; i++ { go cittadino(i, ruotaTipo(i)) }
 	
-	for i := 0; i < NUM_CITTADINI; i++ {
-		<-finito
-	}
+	for i := 0; i < NUM_CITTADINI; i++ { <-finito }
 	bloccaCasaAcqua <- true
 	<-finito
 	terminaCasaAcqua <- true

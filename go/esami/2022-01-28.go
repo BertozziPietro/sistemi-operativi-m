@@ -31,8 +31,8 @@ const (
 
 var (
 	canaliFornitore = [TIPI_FORNITORE][AZIONI_FORNITORE]chan chan bool{
-					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
-					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
+					{make(chan chan bool), make(chan chan bool)},
+					{make(chan chan bool), make(chan chan bool)}}
 	
 	canaliAddetto = [TIPI_ADDETTO][AZIONI_ADDETTO]chan chan bool{
 					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
@@ -58,9 +58,14 @@ func when(b bool, c chan chan bool) chan chan bool {
 	return c
 }
 
+func priorità(canali ...chan chan bool) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
+}
+
 func magazzino() {
 	const nome = "MAGAZZINO"
-	var spazi = strings.Repeat(" ", len(nome)+3)
+	var spazi = strings.Repeat(" ", len(nome) + 3)
 	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
@@ -73,31 +78,14 @@ func magazzino() {
 		fine = false
 	)
 	
-	piùFFP2 := func() bool {
- 		return mascherineFFP2 > mascherineChirurgiche
-	}
+	piùFFP2 := func() bool { return mascherineFFP2 > mascherineChirurgiche }
 	
-	rifornimentoFFP2 := func() bool {
- 		return mascherineFFP2 < NF / 2
-	}
-	rifornimentoChirurgiche := func() bool {
- 		return mascherineChirurgiche < NC / 2
-	}
+	rifornimentoFFP2 := func() bool { return mascherineFFP2 < NF / 2 }
+	rifornimentoChirurgiche := func() bool { return mascherineChirurgiche < NC / 2 }
 	
-	prelievoFFP2 := func() bool {
- 		return mascherineFFP2 >= LF
-	}
-	prelievoChirurgiche := func() bool {
- 		return mascherineChirurgiche >= LC
-	}
-	prelievoMisto := func() bool {
- 		return mascherineFFP2 >= LM && mascherineChirurgiche >= LM
-	}
-	
-	priorità := func(canali ...chan chan bool) bool {
-		for _, c := range canali { if len(c) > 0 { return false } }
-		return true
-	}
+	prelievoFFP2 := func() bool { return mascherineFFP2 >= LF }
+	prelievoChirurgiche := func() bool { return mascherineChirurgiche >= LC }
+	prelievoMisto := func() bool { return mascherineFFP2 >= LM && mascherineChirurgiche >= LM }
 
 	for {
 		var canaliFornitoreSlice = make([][]chan chan bool, len(canaliFornitore))
@@ -205,7 +193,7 @@ func fornitore(id int, tipo int) {
 	)
 	for {
 		for i, azione := range azioni {
-			time.Sleep(time.Duration(rand.Intn(TEMPO_FORNITORE)+TEMPO_MINIMO) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(TEMPO_FORNITORE) + TEMPO_MINIMO) * time.Millisecond)
 			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 			canaliFornitore[tipo][i] <- ack
 			continua = <-ack
@@ -228,7 +216,7 @@ func addetto(id int, tipo int) {
 		azioni = [AZIONI_ADDETTO]string {"entrare nel magazzino", "uscire dal magazzino"}
 	)
 	for i, azione := range azioni {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO)+TEMPO_MINIMO) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliAddetto[tipo][i] <- ack
 		<-ack
@@ -244,20 +232,12 @@ func main() {
 	rand.Seed(time.Now().Unix())
 	
 	go magazzino()
-	for i := 0; i < NUM_FORNITORI; i++ {
-		go fornitore(i, i%2)
-	}
-	for i := 0; i < NUM_ADDETTI; i++ {
-		go addetto(i, i%3)
-	}
+	for i := 0; i < NUM_FORNITORI; i++ { go fornitore(i, i % 2) }
+	for i := 0; i < NUM_ADDETTI; i++ { go addetto(i, i % 3) }
 	
-	for i := 0; i < NUM_ADDETTI; i++ {
-		<-finito
-	}
+	for i := 0; i < NUM_ADDETTI; i++ { <-finito }
 	bloccaMagazzino <- true
-	for i := 0; i < NUM_FORNITORI; i++ {
-		<-finito
-	}
+	for i := 0; i < NUM_FORNITORI; i++ { <-finito }
 	terminaMagazzino <- true
 	<-finito
 	

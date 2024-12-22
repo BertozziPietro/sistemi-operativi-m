@@ -45,9 +45,9 @@ var (
 					 make(chan chan bool, MAX_BUFF),
 					 make(chan chan bool, MAX_BUFF)}
 
-	finito         = make(chan bool, MAX_BUFF)
-	bloccaStrada   = make(chan bool)
-	terminaStrada  = make(chan bool)
+	finito          = make(chan bool, MAX_BUFF)
+	bloccaCastello  = make(chan bool)
+	terminaCastello = make(chan bool)
 )
 
 func lunghezze(canali []chan chan bool) []int {
@@ -61,10 +61,15 @@ func when(b bool, c chan chan bool) chan chan bool {
 	return c
 }
 
-func strada() {
-	const nome = "STRADA"
-	var spazi = strings.Repeat(" ", len(nome)+3)
-	fmt.Printf("[%s] inizio", nome)
+func priorità(canali ...chan chan bool) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
+}
+
+func castello() {
+	const nome = "CASTELLO"
+	var spazi = strings.Repeat(" ", len(nome) + 3)
+	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
 		liberiM = NS
@@ -76,14 +81,7 @@ func strada() {
 		fine = false
 	)
 	
-	vuota := func() bool {
- 		return camper + auto == 0
-	}
-	
-	priorità := func(canali ...chan chan bool) bool {
-		for _, c := range canali { if len(c) > 0 { return false } }
-		return true
-	}
+	vuota := func() bool { return camper + auto == 0 }
 
 	for {
 		var (
@@ -162,12 +160,12 @@ func strada() {
 			auto--
 			ack <- true
 		}
-		case <-bloccaStrada: {
+		case <-bloccaCastello: {
 			fine = true
 		}
-		case <-terminaStrada: {
+		case <-terminaCastello: {
 			finito <- true
-			fmt.Printf("[%s] fine", nome)
+			fmt.Printf("[%s] fine\n", nome)
 			return
 		}}
 	}
@@ -184,7 +182,7 @@ func spazzaneve(id int) {
 	)
 	for {
 		for i, azione := range azioni {
-			time.Sleep(time.Duration(rand.Intn(TEMPO_SPAZZANEVE)+TEMPO_MINIMO) * time.Millisecond)
+			time.Sleep(time.Duration(rand.Intn(TEMPO_SPAZZANEVE) + TEMPO_MINIMO) * time.Millisecond)
 			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 			canaliSpazzaneve[i] <- ack
 			continua = <-ack
@@ -207,7 +205,7 @@ func camper(id int) {
 		azioni = [AZIONI_CAMPER]string{"salire per la strada", "sostare al castello", "scendere per la strada", "tornare a casa"}
 	)
 	for i, azione := range azioni {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_CAMPER)+TEMPO_MINIMO) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(TEMPO_CAMPER) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliCamper[i] <- ack
 		<-ack
@@ -227,7 +225,7 @@ func auto(id int) {
 		azioni = [AZIONI_AUTO]string {"salire per la strada", "sostare al castello", "scendere per la strada", "tornare a casa"}
 	)
 	for i, azione := range azioni {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_AUTO)+TEMPO_MINIMO) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(TEMPO_AUTO) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliAuto[i] <- ack
 		<-ack
@@ -242,21 +240,15 @@ func main() {
 	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
 	
-	go strada()
+	go castello()
 	go spazzaneve(0)
-	for i := 0; i < NUM_CAMPER; i++ {
-		go camper(i)
-	}
-	for i := 0; i < NUM_AUTO; i++ {
-		go auto(i)
-	}
+	for i := 0; i < NUM_CAMPER; i++ { go camper(i) }
+	for i := 0; i < NUM_AUTO; i++ { go auto(i) }
 	
-	for i := 0; i < NUM_CAMPER+NUM_AUTO; i++ {
-		<-finito
-	}
-	bloccaStrada <- true
+	for i := 0; i < NUM_CAMPER + NUM_AUTO; i++ { <-finito }
+	bloccaCastello <- true
 	<-finito
-	terminaStrada <- true
+	terminaCastello <- true
 	<-finito
 	
 	fmt.Println("[MAIN] fine")

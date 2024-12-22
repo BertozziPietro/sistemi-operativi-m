@@ -45,9 +45,14 @@ func when(b bool, c chan chan bool) chan chan bool {
 	return c
 }
 
+func priorità(canali ...chan chan bool) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
+}
+
 func mostra() {
 	const nome = "MOSTRA"
-	var spazi = strings.Repeat(" ", len(nome)+3)
+	var spazi = strings.Repeat(" ", len(nome) + 3)
 	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
@@ -59,14 +64,7 @@ func mostra() {
 		corridoioDirezione = 0
 	)
 	
-	liberi := func(aggiunti int) bool {
- 		return mostraUtenti + aggiunti <= N
-	}
-	
-	priorità := func(canali ...chan chan bool) bool {
-		for _, c := range canali { if len(c) > 0 { return false } }
-		return true
-	}
+	liberi := func(aggiunti int) bool { return mostraUtenti + aggiunti <= N }
 
 	for {
 		var canaliUtenteSlice = make([][]chan chan bool, len(canaliUtente))
@@ -156,7 +154,7 @@ func utente(id int, tipo int) {
 		azioni = [AZIONI_UTENTE]string {"percorrere il corridoio verso la mostra", "entrare nella mostra", "percorrere il corridoio verso casa", "tornare a casa"}
 	)
 	for i, azione := range azioni {
-		time.Sleep(time.Duration(rand.Intn(TEMPO_UTENTE)+TEMPO_MINIMO) * time.Millisecond)
+		time.Sleep(time.Duration(rand.Intn(TEMPO_UTENTE) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliUtente[tipo][i] <- ack
 		<-ack
@@ -172,13 +170,9 @@ func main() {
 	rand.Seed(time.Now().Unix())
 	
 	go mostra()
-	for i := 0; i < NUM_UTENTI; i++ {
-		go utente(i, i%3)
-	}
+	for i := 0; i < NUM_UTENTI; i++ { go utente(i, i % 3) }
 	
-	for i := 0; i < NUM_UTENTI; i++ {
-		<-finito
-	}
+	for i := 0; i < NUM_UTENTI; i++ { <-finito }
 	terminaMostra <- true
 	<-finito
 	
