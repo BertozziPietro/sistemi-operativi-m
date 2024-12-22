@@ -4,204 +4,262 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
-const MAXPROC = 25
-const MAXCICLI = 3
-const NC = 10 //capacità scaffale chirurgiche
-const NF = 10 //capacità scaffale ffp2
-const LF = 4  //numerosità lotto FFP2
-const LC = 3  //numerosità lotto Chir
-const LM = 2  //numerosità lotto Misto
+const (
+	NF       = 20
+	NC       = 20
+	LF		 = 4
+	LC		 = 4
+	LM 		 = 2
+	MAX_BUFF = 50
 
-const T_MIX = 0  //tipo formato misto
-const T_FFP2 = 1 //tipo formato FFP2
-const T_CHIR = 2 //tipo formato CHIRURGICHE
+	NUM_FORNITORI = 2
+	NUM_ADDETTI   = 90
+	
+	TEMPO_MINIMO    = 500
+	TEMPO_FORNITORE = 1000
+	TEMPO_ADDETTO   = 1000
+	
+	AZIONI_FORNITORE = 2
+	AZIONI_ADDETTO   = 2
+	
+	TIPI_FORNITORE = 2
+	TIPI_ADDETTO   = 3
+)
 
-const F_FFP2 = 0 // fornitore FFP2
-const F_CHIR = 1 // fornitore CHIR
+var (
+	canaliFornitore = [TIPI_FORNITORE][AZIONI_FORNITORE]chan chan bool{
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
+	
+	canaliAddetto = [TIPI_ADDETTO][AZIONI_ADDETTO]chan chan bool{
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
+					
+	finito           = make(chan bool, MAX_BUFF)
+	bloccaMagazzino  = make(chan bool)
+	terminaMagazzino = make(chan bool)
+)
 
-var done = make(chan bool)
-var termina = make(chan bool)
-var chiudi = make(chan bool)
-
-//canali dedicati agli addetti
-var inizio_prelievo [3]chan richiesta
-var fine_prelievo = make(chan richiesta, 100)
-
-//canali dedicati ai fornitori
-var inizio_consegna [2]chan richiesta
-var fine_consegna = make(chan richiesta, 100)
-
-type richiesta struct {
-	id   int
-	tipo int
-	ack  chan int
-}
-
-func sleep(t int) {
-	time.Sleep(time.Duration(rand.Intn(t)+1) * time.Second)
-}
-func when(b bool, c chan richiesta) chan richiesta {
-	if !b {
-		return nil
+func lunghezzeCanaliInMatrice(canali [][]chan chan bool) [][]int {
+	lunghezze := make([][]int, len(canali))
+	for i, riga := range canali {
+		lunghezze[i] = make([]int, len(riga))
+		for j, c := range riga { lunghezze[i][j] = len(c) }
 	}
+	return lunghezze
+}
+
+func when(b bool, c chan chan bool) chan chan bool {
+	if !b { return nil }
 	return c
-
 }
 
-func AR(id int) { // addetto di reparto
-	tipo := rand.Intn(3) //0 per Misto, 1 per ffp2 , 2 per chirurgiche
-	r := richiesta{id, tipo, make(chan int)}
-	sleep(10)
-	cicli := rand.Intn(MAXCICLI) + 1
-	for i := 0; i < cicli; i++ { // ciclo prelievi
-		tipo := rand.Intn(3) //0 per Misto, 1 per ffp2 , 2 per chirurgiche
-		r.tipo = tipo
-		if tipo == T_MIX {
-			fmt.Printf("[AR %d] richiedo prelievo di un lotto  misto\n", id)
-		} else if tipo == T_FFP2 {
-			fmt.Printf("[AR %d] richiedo prelievo di un lotto  FFP2\n", id)
-		} else {
-			fmt.Printf("[AR %d] richiedo prelievo di un lotto  Chirurgiche\n", id)
-		}
-		inizio_prelievo[tipo] <- r
-		<-r.ack
-		sleep(10) //tempo impiegato per il prelievo
-		//richiesta fine erogazione
-		fine_prelievo <- r
-		<-r.ack
-	}
-	//terminazione
-	fmt.Printf("[AR %d] termino \n", id)
-	done <- true
-
-}
-func fornitore(tipo int) { //tipo è FFP2 o chirurgica
-	r := richiesta{tipo, tipo, make(chan int)}
-
-	for { // ciclo consegne
-		sleep(5)
-		fmt.Printf("[Fornitore %d] richiesta riempimento mascherine  di tipo %d\n", tipo, tipo)
-		inizio_consegna[tipo] <- r
-		flag := <-r.ack
-		sleep(20) //tempo impiegato per riempire lo scaffale
-		//fine rifornimento:
-		if flag == 0 { //il fornitore deve terminare
-			done <- true
-			fmt.Printf("[fornitore% d] finito!\n", tipo)
-			return
-		}
-		fine_consegna <- r
-		<-r.ack
-		fmt.Printf("[Fornitore %d] ho finito di riempire lo scaffale di mascherine di tipo %d\n", tipo, tipo)
-		sleep(3)
-	}
-}
 func magazzino() {
-	var Disp_FFP2 = NF   //numero scatole disponibili nello scaffale FFP2
-	var Disp_CHIR = NC   //numero scatole disponibili nello scaffale CHIR
-	var Forn_in_FFP2 = 0 //numero fornitori in consegna sullo scaffale FFP2
-	var Forn_in_CHIR = 0 //numero fornitori in consegna sullo scaffale CHIR
-	var AR_in_FFP2 = 0   //numero addetti in prelievo dallo scaffale FFP2
-	var AR_in_CHIR = 0   //numero addetti in prelievo dallo scaffale CHIR
-	var END = false      //diventa true quando tutti gli AR sono terminati
+	const nome = "MAGAZZINO"
+	var spazi = strings.Repeat(" ", len(nome)+3)
+	fmt.Printf("[%s] inizio\n", nome)
+
+	var (
+		mascherineFFP2 = 0
+		mascherineChirurgiche = 0
+		addettiFFP2 = 0
+		addettiChirurgiche = 0
+		scaffaleFFP2 = 0
+		scaffaleChirurgiche = 0
+		fine = false
+	)
+	
+	piùFFP2 := func() bool {
+ 		return mascherineFFP2 > mascherineChirurgiche
+	}
+	
+	rifornimentoFFP2 := func() bool {
+ 		return mascherineFFP2 < NF / 2
+	}
+	rifornimentoChirurgiche := func() bool {
+ 		return mascherineChirurgiche < NC / 2
+	}
+	
+	prelievoFFP2 := func() bool {
+ 		return mascherineFFP2 >= LF
+	}
+	prelievoChirurgiche := func() bool {
+ 		return mascherineChirurgiche >= LC
+	}
+	prelievoMisto := func() bool {
+ 		return mascherineFFP2 >= LM && mascherineChirurgiche >= LM
+	}
+	
+	priorità := func(canali ...chan chan bool) bool {
+		for _, c := range canali { if len(c) > 0 { return false } }
+		return true
+	}
+
 	for {
+		var canaliFornitoreSlice = make([][]chan chan bool, len(canaliFornitore))
+		for i, row := range canaliFornitore { canaliFornitoreSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var canaliAddettoSlice = make([][]chan chan bool, len(canaliAddetto))
+		for i, row := range canaliAddetto { canaliAddettoSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var (
+			lunghezzeFornitore = lunghezzeCanaliInMatrice(canaliFornitoreSlice)
+			lunghezzeAddetto   = lunghezzeCanaliInMatrice(canaliAddettoSlice)
+		)
+		fmt.Printf("[%s] mascherineFFP2: %03d, mascherineChirurgiche: %03d, addettiFFP2: %03d, addettiChirurgiche: %03d, scaffaleFFP2: %03d, scaffaleChirurgiche: %03d, fine: %5t\n%scanaliFornitore: %v, canaliAddetto: %v\n",
+		nome, mascherineFFP2, mascherineChirurgiche, addettiFFP2, addettiChirurgiche, scaffaleFFP2, scaffaleChirurgiche, fine, spazi, lunghezzeFornitore, lunghezzeAddetto)
+		
 		select {
-		// PRELIEVI:
-		case x := <-when(Disp_CHIR >= LM && Disp_FFP2 >= LM && Forn_in_CHIR == 0 && Forn_in_FFP2 == 0, inizio_prelievo[T_MIX]):
-			AR_in_CHIR++
-			AR_in_FFP2++
-			Disp_CHIR -= LM
-			Disp_FFP2 -= LM
-			fmt.Printf("[Magazzino] l'addetto %d inizia a prelevare un lotto di tipo %d \n", x.id, x.tipo)
-			x.ack <- 1
-		case x := <-when(Disp_FFP2 >= LF && Forn_in_FFP2 == 0 && len(inizio_prelievo[T_MIX]) == 0, inizio_prelievo[T_FFP2]):
-			AR_in_FFP2++
-			Disp_FFP2 -= LF
-			fmt.Printf("[Magazzino] l'addetto %d inizia a prelevare un lotto di tipo %d \n", x.id, x.tipo)
-			x.ack <- 1
-		case x := <-when(Disp_CHIR >= LC && Forn_in_CHIR == 0 && len(inizio_prelievo[T_MIX]) == 0 && len(inizio_prelievo[T_FFP2]) == 0, inizio_prelievo[T_CHIR]):
-			AR_in_CHIR++
-			Disp_CHIR -= LC
-			fmt.Printf("[Magazzino] l'addetto %d inizia a prelevare un lotto di tipo %d \n", x.id, x.tipo)
-			x.ack <- 1
-		case x := <-fine_prelievo:
-			if x.tipo == T_MIX {
-				AR_in_CHIR--
-				AR_in_FFP2--
-			} else if x.tipo == T_FFP2 {
-				AR_in_FFP2--
-			} else {
-				AR_in_CHIR--
-			}
-			fmt.Printf("[Magazzino] l'addetto %d ha terminato il prelievo\n", x.id)
-			x.ack <- 1
-		//CONSEGNE:
-		case x := <-when(END == false && Disp_CHIR < NC && Forn_in_CHIR == 0 && AR_in_CHIR == 0 && ((Disp_CHIR >= Disp_FFP2 && len(inizio_consegna[F_FFP2]) == 0) || Disp_CHIR < Disp_FFP2), inizio_consegna[F_CHIR]):
-			Disp_CHIR = NC
-			Forn_in_CHIR++
-			x.ack <- 1
-		case x := <-when(END == false && Disp_FFP2 < NF && Forn_in_FFP2 == 0 && AR_in_FFP2 == 0 && ((Disp_CHIR < Disp_FFP2 && len(inizio_consegna[F_CHIR]) == 0) || Disp_CHIR >= Disp_FFP2), inizio_consegna[F_FFP2]):
-			Disp_FFP2 = NF
-			Forn_in_FFP2++
-			fmt.Printf("[Magazzino] il fornitore %d ha iniziato a riempire lo scaffale %d\n", x.id, x.tipo)
-			x.ack <- 1
-
-		case x := <-fine_consegna:
-			if x.tipo == F_FFP2 {
-				Forn_in_FFP2--
-			} else {
-				Forn_in_CHIR--
-			}
-			fmt.Printf("[Magazzino] il fornitore %d ha terminato di riempire lo scaffale %d\n", x.id, x.tipo)
-			x.ack <- 1
-		case <-termina:
-			END = true
-			fmt.Printf("[Magazzino] il magazzino sta per chiudere ...\n")
-
-		case x := <-when(END == true, inizio_consegna[0]):
-			x.ack <- 0
-		case x := <-when(END == true, inizio_consegna[1]):
-			x.ack <- 0
-		case <-chiudi:
-			END = true
-			fmt.Printf("[Magazzino] il magazzino CHIUDE!\n")
-			done <- true
-			return
-
+		case ack := <-when(!fine && !piùFFP2() && rifornimentoFFP2() && scaffaleFFP2 == 0,
+		canaliFornitore[0][0]): {
+			mascherineFFP2 = NF
+			scaffaleFFP2 = 2
+			ack <- true	 
 		}
-		// per debug:
-		//fmt.Printf("\n[Magazzino] stato attuale: \nFFP2=%d, \nCHIR=%d, \nARin prelievo C= %d\nARin prelievoF=%d\nFornitori_inConsegnaF=%d\nFornitori_inconsegnaC=%d\n",
-		//	Disp_FFP2, Disp_CHIR, AR_in_CHIR, AR_in_FFP2, Forn_in_FFP2, Forn_in_CHIR)
+		case ack := <-when(fine,
+		canaliFornitore[0][0]): {
+			ack <- false
+		}
+		case ack := <-canaliFornitore[0][1]: {
+			scaffaleFFP2 = 0
+			ack <- true	 
+		}
+		case ack := <-when(!fine && piùFFP2() && rifornimentoChirurgiche() && scaffaleChirurgiche == 0,
+		canaliFornitore[1][0]): {
+			mascherineChirurgiche = NC
+			scaffaleChirurgiche = 2
+			ack <- true	 
+		}
+		case ack := <-when(fine,
+		canaliFornitore[1][0]): {
+			ack <- false
+		}
+		case ack := <-canaliFornitore[1][1]: {
+			scaffaleChirurgiche = 0
+			ack <- true	 
+		}
+		case ack := <-when(prelievoFFP2() && scaffaleFFP2 != 2 &&
+		priorità(canaliAddetto[2][0]),
+		canaliAddetto[0][0]): {
+			mascherineFFP2 -= LF
+			addettiFFP2++
+			scaffaleFFP2 = 1
+			ack <- true	 
+		}
+		case ack := <-canaliAddetto[0][1]: {
+			addettiFFP2--
+			if addettiFFP2 == 0 { scaffaleFFP2 = 0}
+			ack <- true	 
+		}
+		case ack := <-when(prelievoChirurgiche() && scaffaleChirurgiche != 2 &&
+		priorità(canaliAddetto[2][0], canaliAddetto[0][0]),
+		canaliAddetto[1][0]): {
+			mascherineChirurgiche -= LC
+			addettiChirurgiche++
+			scaffaleChirurgiche = 1
+			ack <- true	 
+		}
+		case ack := <-canaliAddetto[1][1]: {
+			addettiChirurgiche--
+			if addettiChirurgiche == 0 { scaffaleChirurgiche = 0}
+			ack <- true	 
+		}
+		case ack := <-when(prelievoMisto() && scaffaleFFP2 != 2 && scaffaleChirurgiche != 2,
+		canaliAddetto[2][0]): {
+			mascherineFFP2 -= LM
+			mascherineChirurgiche -= LM
+			addettiFFP2++
+			addettiChirurgiche++
+			scaffaleFFP2 = 1
+			scaffaleChirurgiche = 1
+			ack <- true	 
+		}
+		case ack := <-canaliAddetto[2][1]: {
+			addettiFFP2--
+			addettiChirurgiche--
+			if addettiFFP2 == 0 { scaffaleFFP2 = 0}
+			if addettiChirurgiche == 0 { scaffaleChirurgiche = 0}
+			ack <- true	 
+		}
+		case <-bloccaMagazzino: {
+			fine = true
+		}
+		case <-terminaMagazzino: {
+			finito <- true
+			fmt.Printf("[%s] fine\n", nome)
+			return
+		}}
 	}
 }
+
+func fornitore(id int, tipo int) {
+	const nome = "FORNITORE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_FORNITORE]string {"entrare nel magazzino", "uscire dal magazzino"}
+		continua bool
+	)
+	for {
+		for i, azione := range azioni {
+			time.Sleep(time.Duration(rand.Intn(TEMPO_FORNITORE)+TEMPO_MINIMO) * time.Millisecond)
+			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+			canaliFornitore[tipo][i] <- ack
+			continua = <-ack
+			if !continua {
+				finito <- true
+				fmt.Printf("[%s %03d] fine\n", nome, id)
+				return
+			}
+			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+		}
+	}
+}
+
+func addetto(id int, tipo int) {
+	const nome = "ADDETTO"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_ADDETTO]string {"entrare nel magazzino", "uscire dal magazzino"}
+	)
+	for i, azione := range azioni {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO)+TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+		canaliAddetto[tipo][i] <- ack
+		<-ack
+		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+	}
+	
+	finito <- true
+	fmt.Printf("[%s %03d] fine\n", nome, id)
+}
+
 func main() {
+	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
-	for i := 0; i < 2; i++ {
-		inizio_consegna[i] = make(chan richiesta, 100)
-	}
-	for i := 0; i < 3; i++ {
-		inizio_prelievo[i] = make(chan richiesta, 100)
-	}
-	numeroAR := rand.Intn(MAXPROC) + 2 //per avere almeno 2 addetti
-	fmt.Printf("Il numero di AR è: %d\n", numeroAR)
+	
 	go magazzino()
-	go fornitore(F_CHIR)
-	go fornitore(F_FFP2)
-	for i := 0; i < numeroAR; i++ {
-		go AR(i)
+	for i := 0; i < NUM_FORNITORI; i++ {
+		go fornitore(i, i%2)
 	}
-	for i := 0; i < numeroAR; i++ { // attesa AR
-		<-done
+	for i := 0; i < NUM_ADDETTI; i++ {
+		go addetto(i, i%3)
 	}
-
-	fmt.Printf("[MAIN] tutti gli AR sono terminati!\n")
-	termina <- true //avverto il server che tutti gli addetti sono terminati
-
-	for i := 0; i < 2; i++ { // attendo i due fornitori
-		<-done
+	
+	for i := 0; i < NUM_ADDETTI; i++ {
+		<-finito
 	}
-	chiudi <- true // comando al server di terminare
-	<-done         // attesa server
+	bloccaMagazzino <- true
+	for i := 0; i < NUM_FORNITORI; i++ {
+		<-finito
+	}
+	terminaMagazzino <- true
+	<-finito
+	
+	fmt.Println("[MAIN] fine")
 }
