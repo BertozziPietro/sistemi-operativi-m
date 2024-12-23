@@ -4,303 +4,217 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
-const maxP = 3 //max pneumatici nel deposito
-const maxC = 3 //max cerchi nel deposito
-const tipoPA = 0
-const tipoPB = 1
-const tipoCA = 2
-const tipoCB = 3
-const RobotA = 0
-const RobotB = 1
-const TOT = 7 //numero totale di auto da trattare
+const (
+	MAXP     = 20
+	MAXC     = 20
+	TOT      = 20
+	MAX_BUFF = 6
 
-var tipoRobot = [2]string{"Modello A", "Modello B"}
-var tipoNastro = [4]string{"pneumatico A", "pneumatico B", "cerchio A", "cerchio B"}
+	NUM_NASTRI = 4
+	NUM_ROBOT  = 2
+	
+	TEMPO_MINIMO = 500
+	TEMPO_NASTRO = 1000
+	TEMPO_ROBOT  = 1000
+	TEMPO_FINE   = 2000
+	
+	AZIONI_NASTRO = 1
+	AZIONI_ROBOT  = 2
+	
+	TIPI_NASTRO = 4
+	TIPI_ROBOT  = 2
+)
 
-var done = make(chan bool)
-var terminaDeposito = make(chan bool)
+var (
+	canaliNastro = [TIPI_NASTRO]chan chan bool{
+				   make(chan chan bool),
+				   make(chan chan bool),
+				   make(chan chan bool),
+				   make(chan chan bool)}
+	
+	canaliRobot = [TIPI_ROBOT][AZIONI_ROBOT]chan chan bool{
+				  {make(chan chan bool), make(chan chan bool)},
+				  {make(chan chan bool), make(chan chan bool)}}
+					
+	finito              = make(chan bool)
+	bloccaStabilimento  = make(chan bool)
+	terminaStabilimento = make(chan bool)
+)
 
-//canali usati dai robot per prelevare pezzi dal deposito
-var prelievoPA = make(chan int, 100)
-var prelievoPB = make(chan int, 100)
-var prelievoCA = make(chan int, 100)
-var prelievoCB = make(chan int, 100)
+func lunghezzeCanaliInVettore(canali []chan chan bool) []int {
+	lunghezze := make([]int, len(canali))
+	for i, c := range canali { lunghezze[i] = len(c) }
+	return lunghezze
+}
 
-//canali usati dai nastri per depositare pezzi nel deposito
-var consegnaPA = make(chan int, 100)
-var consegnaPB = make(chan int, 100)
-var consegnaCA = make(chan int, 100)
-var consegnaCB = make(chan int, 100)
-
-//canali di ack
-var ack_robotA = make(chan int)   // canale di ack per il robot relativo al modello A
-var ack_robotB = make(chan int)   // canale di ack per il robot relativo al modello B
-var ack_nastroPA = make(chan int) // canale di ack per il nastro relativo a PA
-var ack_nastroPB = make(chan int) // canale di ack per il nastro relativo a PB
-var ack_nastroCA = make(chan int) // canale di ack per il nastro relativo a CA
-var ack_nastroCB = make(chan int) // canale di ack per il nastro relativo a CB
-
-func when(b bool, c chan int) chan int {
-	if !b {
-		return nil
+func lunghezzeCanaliInMatrice(canali [][]chan chan bool) [][]int {
+	lunghezze := make([][]int, len(canali))
+	for i, riga := range canali {
+		lunghezze[i] = make([]int, len(riga))
+		for j, c := range riga { lunghezze[i][j] = len(c) }
 	}
+	return lunghezze
+}
+
+func when(b bool, c chan chan bool) chan chan bool {
+	if !b { return nil }
 	return c
 }
 
-func Robot(tipo int) {
-	var tt int
-	fmt.Printf("[Robot %s]: partenza! \n", tipoRobot[tipo])
-	var k, ris int
-
-	for { // per ogni auto..
-		for i := 0; i < 4; i++ { // per ognuna delle 4 ruote..
-			if tipo == 0 { // Robot per modello A
-				prelievoCA <- tipo
-				ris = <-ack_robotA
-				if ris == -1 {
-					fmt.Printf("[Robot %s]: termino attività!\n", tipoRobot[tipo])
-					done <- true
-					return
-				}
-				fmt.Printf("[Robot %s]: prelevato cerchio CA\n", tipoRobot[tipo])
-				tt = (rand.Intn(2) + 1)
-				time.Sleep(time.Duration(tt) * time.Second) //tempo di montaggio cerchio
-
-				prelievoPA <- tipo
-				ris = <-ack_robotA
-				if ris == -1 {
-					fmt.Printf("[Robot %s]: termino!\n", tipoRobot[tipo])
-					done <- true
-					return
-				}
-				fmt.Printf("[Robot %s]: prelevato pneumatico PA\n", tipoRobot[tipo])
-				tt = (rand.Intn(2) + 1)
-				time.Sleep(time.Duration(tt) * time.Second) //tempo di montaggio pneumatico
-
-			} else { // Robot per modello B
-				prelievoCB <- tipo
-				ris = <-ack_robotB
-				if ris == -1 {
-					fmt.Printf("[Robot %s]: termino!\n", tipoRobot[tipo])
-					done <- true
-					return
-				}
-				fmt.Printf("[Robot %s]: prelevato cerchio CB\n", tipoRobot[tipo])
-				tt = (rand.Intn(2) + 1)
-				time.Sleep(time.Duration(tt) * time.Second) //tempo di montaggio cerchio
-
-				prelievoPB <- tipo
-				ris = <-ack_robotB
-				if ris == -1 {
-					fmt.Printf("[Robot %s]: termino!\n", tipoRobot[tipo])
-					done <- true
-					return
-				}
-				fmt.Printf("[Robot %s]: prelevato pneumatico PB\n", tipoRobot[tipo])
-				tt = (rand.Intn(2) + 1)
-				time.Sleep(time.Duration(tt) * time.Second) //tempo di montaggio pneumatico
-			}
-		}
-		k++
-		fmt.Printf("[Robot %s]: ho completato l'auto n. %d\n", tipoRobot[tipo], k)
-	}
+func priorità(canali ...chan chan bool) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
 }
 
-func nastro(myType int) {
-	var tt int
-	var i, ris int
+func stabilimento() {
+	const nome = "STABILIMENTO"
+	var spazi = strings.Repeat(" ", len(nome) + 3)
+	fmt.Printf("[%s] inizio\n", nome)
+
+	var (
+		CA = 0
+		CB = 0
+		PA = 0
+		PB = 0
+		Ap = 0
+		Bp = 0
+		A = 0
+		B = 0
+	)
+	
+	pienoC := func() bool { return CA + CB == MAXC }
+	pienoP := func() bool { return PA + PB == MAXP }
+	
+	piùA := func() bool { return A > B }
+
 	for {
-		tt = rand.Intn(2) + 1
-		time.Sleep(time.Duration(tt) * time.Second) //tempo di trasporto del pezzo
-		switch {
-		case myType == 0: //PA
-			consegnaPA <- 1
-			ris = <-ack_nastroPA
-			if ris == -1 {
-				fmt.Printf("[nastro %s]:  termino!\n", tipoNastro[myType])
-				done <- true
-				return
-			}
-			fmt.Printf("[nastro %s]: consegnato %s \n", tipoNastro[myType], tipoNastro[myType])
-		case myType == 1: //PB
-			consegnaPB <- 1
-			ris = <-ack_nastroPB
-			if ris == -1 {
-				fmt.Printf("[nastro %s]:  termino!\n", tipoNastro[myType])
-				done <- true
-				return
-			}
-			fmt.Printf("[nastro %s]: consegnato %s \n", tipoNastro[myType], tipoNastro[myType])
-		case myType == 2: //CA
-			consegnaCA <- 1
-			ris = <-ack_nastroCA
-			if ris == -1 {
-				fmt.Printf("[nastro %s]:  termino!\n", tipoNastro[myType])
-				done <- true
-				return
-			}
-			fmt.Printf("[nastro %s]: consegnato %s \n", tipoNastro[myType], tipoNastro[myType])
-		case myType == 3: //CB
-			consegnaCB <- 1
-			ris = <-ack_nastroCB
-			if ris == -1 {
-				fmt.Printf("[nastro %s]:  termino!\n", tipoNastro[myType])
-				done <- true
-				return
-			}
-			fmt.Printf("[nastro %s]: consegnato %s \n", tipoNastro[myType], tipoNastro[myType])
-		default:
-			fmt.Printf("[nastro %d]: inizializzato erroneamente, termino!\n", myType)
-		}
-		i++
-	}
-
-}
-
-func deposito() {
-	var numCAMontati int = 0
-	var numCBMontati int = 0
-	var numPAMontati int = 0
-	var numPBMontati int = 0
-
-	var numAMontati int = 0
-	var numBMontati int = 0
-
-	var numCA int = 0
-	var numCB int = 0
-	var numPA int = 0
-	var numPB int = 0
-
-	var totP int = 0
-	var totC int = 0
-	var fine bool = false
-	for {
+		var canaliRobotSlice = make([][]chan chan bool, len(canaliRobot))
+		for i, row := range canaliRobot { canaliRobotSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var (
+			lunghezzeNastro = lunghezzeCanaliInVettore(canaliNastro[:])
+			lunghezzeRobot  = lunghezzeCanaliInMatrice(canaliRobotSlice)
+		)
+		fmt.Printf("[%s] CA: %03d, CB: %03d, PA: %03d, PB: %03d, Ap: %03d, Bp: %03d, A: %03d, B: %03d\n%sCanaliNastro: %v, CanaliRobot: %v,\n",
+		nome, CA, CB, PA, PB, Ap, Bp, A, B, spazi, lunghezzeNastro, lunghezzeRobot)
+		
+        if A + B >= TOT {
+        	time.Sleep(time.Duration(TEMPO_FINE) * time.Millisecond)
+            for _, c := range canaliNastro {  <-c <- false }
+            for _, row := range canaliRobot { for _, c := range row { if len(c) > 0 { <-c <- false  } } }
+            finito <- true
+			fmt.Printf("[%s] fine\n", nome)
+			return
+        }
 
 		select {
-		case <-when(fine == false && (totC < maxC && numCA < maxC-1) && (numAMontati < numBMontati ||
-			(numAMontati >= numBMontati && len(consegnaCB) == 0)), consegnaCA):
-			numCA++
-			totC++
-			ack_nastroCA <- 1
-			fmt.Printf("[deposito]: arrivato cerchio A, ci sono %d CA e %d CB -> tot cerchi nel deposito = %d!\n", numCA, numCB, totC)
-		case <-when(fine == false && (totC < maxC && numCB < maxC-1) && (numAMontati >= numBMontati ||
-			(numAMontati < numBMontati && len(consegnaCA) == 0)), consegnaCB):
-			numCB++
-			totC++
-			ack_nastroCB <- 1
-			fmt.Printf("[deposito]: arrivato cerchio B, ci sono %d CA e %d CB -> tot cerchi nel deposito = %d!\n", numCA, numCB, totC)
-		case <-when(fine == false && (totP < maxP && numPA < maxP-1) && (numAMontati < numBMontati ||
-			(numAMontati >= numBMontati && len(consegnaPB) == 0)), consegnaPA):
-			numPA++
-			totP++
-			ack_nastroPA <- 1
-			fmt.Printf("[deposito]: arrivato pneumatico A, ci sono %d PA e %d PB -> tot pneumatici nel deposito = %d!\n", numPA, numPB, totP)
-		case <-when(fine == false && (totP < maxP && numPB < maxP-1) && (numAMontati >= numBMontati ||
-			(numAMontati < numBMontati && len(consegnaPA) == 0)), consegnaPB):
-			numPB++
-			totP++
-			ack_nastroPB <- 1
-			fmt.Printf("[deposito]: arrivato pneumatico B, ci sono %d PA e %d PB -> tot pneumatici nel deposito = %d!\n", numPA, numPB, totP)
-		case <-when(fine == false && numCA > 0 && (numAMontati < numBMontati ||
-			(numAMontati >= numBMontati && len(prelievoCB) == 0)), prelievoCA):
-			numCA--
-			totC--
-			numCAMontati++
-			ack_robotA <- 1
-			fmt.Printf("[deposito]: prelevato cerchio A, tot cerchi nel deposito = %d!\n", totC)
-		case <-when(fine == false && numCB > 0 && (numAMontati >= numBMontati ||
-			(numAMontati < numBMontati && len(prelievoCA) == 0)), prelievoCB):
-			numCB--
-			totC--
-			numCBMontati++
-			ack_robotB <- 1
-			fmt.Printf("[deposito]: prelevato cerchio B, tot cerchi nel deposito = %d!\n", totC)
-		case <-when(fine == false && numPA > 0 && (numAMontati < numBMontati ||
-			(numAMontati >= numBMontati && len(prelievoPB) == 0)), prelievoPA):
-			numPA--
-			totP--
-			numPAMontati++
-			ack_robotA <- 1
-			fmt.Printf("[deposito]: prelevato pneumatico A, tot pneumatici nel deposito = %d!\n", totC)
-		//prelievo pneumatico B
-		case <-when(fine == false && numPB > 0 && (numAMontati >= numBMontati ||
-			(numAMontati < numBMontati && len(prelievoPA) == 0)), prelievoPB):
-			numPB--
-			totP--
-			numPBMontati++
-			ack_robotB <- 1
-			fmt.Printf("[deposito]: prelevato pneumatico B, tot pneumatici nel deposito = %d!\n", totC)
-
-		//terminazione
-		case <-when(fine == true, consegnaCA):
-			ack_nastroCA <- -1
-		case <-when(fine == true, consegnaCB):
-			ack_nastroCB <- -1
-		case <-when(fine == true, consegnaPA):
-			ack_nastroPA <- -1
-		case <-when(fine == true, consegnaPB):
-			ack_nastroPB <- -1
-		case <-when(fine == true, prelievoCA):
-			ack_robotA <- -1
-		case <-when(fine == true, prelievoCB):
-			ack_robotB <- -1
-		case <-when(fine == true, prelievoPA):
-			ack_robotA <- -1
-		case <-when(fine == true, prelievoPB):
-			ack_robotB <- -1
-
-		case <-terminaDeposito:
-			fmt.Printf("[deposito]: termino\n")
-			done <- true
-			return
+		case ack := <-when(!piùA() && !pienoC(),
+		canaliNastro[0]): {
+			CA++
+			ack <- true
 		}
-		//conteggio auto montate modello A e B e verifica per terminazione
-		if numCAMontati == 4 && numPAMontati == 4 {
-			numAMontati++
-			numCAMontati = 0
-			numPAMontati = 0
+		case ack := <-when(piùA() && !pienoC(),
+		canaliNastro[1]): {
+			CB++
+			ack <- true
 		}
-		if numCBMontati == 4 && numPBMontati == 4 {
-			numBMontati++
-			numCBMontati = 0
-			numPBMontati = 0
+		case ack := <-when(!piùA() && !pienoP(),
+		canaliNastro[2]): {
+			PA++
+			ack <- true	 
 		}
-		fmt.Printf("[deposito] montate A = %d. montate B = %d\n", numAMontati, numBMontati)
-		if numAMontati+numBMontati == TOT {
-			fine = true
+		case ack := <-when(piùA() && !pienoP(),
+		canaliNastro[3]): {
+			PB++
+			ack <- true
 		}
-
+		case ack := <-when(!piùA() && CA > 0,
+		canaliRobot[0][0]): {
+			CA--
+			ack <- true
+		}
+		case ack := <-when(!piùA() && PA > 0,
+		canaliRobot[0][1]): {
+			PA--
+			Ap++
+			if Ap % 4 == 0 { A++ }
+			ack <- true
+		}
+		case ack := <-when(piùA() && CB > 0,
+		canaliRobot[1][0]): {
+			CB--
+			ack <- true
+		}
+		case ack := <-when(piùA() && PB > 0,
+		canaliRobot[1][1]): {
+			PB--
+			Bp++
+			if Bp % 4 == 0 { B++ }
+			ack <- true
+		}}
 	}
 }
 
-/*-----------MAIN-----------*/
+func nastro(id int, tipo int) {
+	const nome = "NASTRO"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		ack = make(chan bool)
+		azione = "depositare nello stabilimento"
+		continua bool
+	)
+	for {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_NASTRO) + TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+		canaliNastro[tipo] <- ack
+		continua = <-ack
+		if !continua {
+			fmt.Printf("[%s %03d] fine\n", nome, id)
+			return
+		}
+		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+	}
+}
+
+func robot(id int, tipo int) {
+	const nome = "ROBOT"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_ROBOT]string {"prelevare il cerchio", "montare il cerchio"}
+		ruote = 4
+		continua bool
+	)
+	for {
+		for r := 0; r < ruote; r++ {
+			for i, azione := range azioni {
+				time.Sleep(time.Duration(rand.Intn(TEMPO_ROBOT) + TEMPO_MINIMO) * time.Millisecond)
+				fmt.Printf("[%s %03d] mi metto in coda per %s %d\n", nome, id, azione, r)
+				canaliRobot[tipo][i] <- ack
+				continua = <-ack
+				if !continua {
+					fmt.Printf("[%s %03d] fine\n", nome, id)
+					return
+				}
+				fmt.Printf("[%s %03d] è il mio turno di %s %d\n", nome, id, azione, r)
+			}
+		}
+	}
+}
+
 func main() {
+	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
-	fmt.Printf("[main] attivo 4 nastri trasportatori e 2 robot\n")
-
-	/*--go routine--*/
-	go deposito()
-
-	for i := 0; i < 4; i++ {
-		go nastro(i)
-	}
-
-	for i := 0; i < 2; i++ {
-		go Robot(i)
-	}
-
-	/*--attesa terminazione--*/
-	for i := 0; i < 4; i++ { //terminazione nastri
-		<-done
-	}
-
-	for i := 0; i < 2; i++ { //terminazione robot
-		<-done
-	}
-
-	terminaDeposito <- true
-	<-done
-	fmt.Printf("[main] APPLICAZIONE TERMINATA \n")
+	
+	go stabilimento()
+	for i := 0; i < NUM_NASTRI; i++ { go nastro(i, i) }
+	for i := 0; i < NUM_ROBOT; i++ { go robot(i, i) }
+	
+	<-finito
+	
+	fmt.Println("[MAIN] fine")
 }

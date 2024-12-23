@@ -22,6 +22,7 @@ const (
 	TEMPO_MINIMO            = 500
 	TEMPO_APPROVVIGIONATORE = 1000
 	TEMPO_CONSUMATORE       = 1000
+	TEMPO_FINE              = 2000
 	
 	AZIONI_APPROVVIGIONATORE = 2
 	AZIONI_CONSUMATORE       = 2
@@ -79,11 +80,8 @@ func deposito() {
 		turno       = true
 	)
 	
-	fine := func() bool { return DP >= TOTP && DM >= TOTM }
-	
 	approvigionamentoPfizer := func() bool { return VP + NL == MAXP}
 	approvigionamentoModerna := func() bool { return VM + NL == MAXM}
-	
 	consumo := func() bool { return VP + VM >= Q && !approvigionamentoPfizer() && !approvigionamentoModerna()}
 
 	for {
@@ -97,37 +95,38 @@ func deposito() {
 		)
 		fmt.Printf("[%s] VP: %03d, VM: %03d, DP: %03d, DM: %03d, consumatori: %03d, dentro: %03d, turno: %5t\n%scanaliApprovvigionatore: %v, canaliConsumatore: %v\n",
 		nome, VP, VM, DP, DM, consumatori, dentro, turno, spazi, lunghezzeApprovvigionatore, lunghezzeConsumatore)
+			
+		 if DP >= TOTP && DM >= TOTM {
+        	time.Sleep(time.Duration(TEMPO_FINE) * time.Millisecond)
+            for _, row := range canaliApprovvigionatore { for _, c := range row { if len(c) > 0 { <-c <- false  } } }
+            for _, row := range canaliConsumatore { for _, c := range row { if len(c) > 0 { <-c <- false  } } }
+            finito <- true
+			fmt.Printf("[%s] fine\n", nome)
+			return
+        }
 
 		select {
-		case ack := <-when(!fine() && approvigionamentoPfizer() && dentro == 0,
+		case ack := <-when(approvigionamentoPfizer() && dentro == 0,
 		canaliApprovvigionatore[0][0]): {
 			VP = MAXP
 			dentro = 2
 			ack <- true	 
 		}
-		case ack := <-when(fine(),
-		canaliApprovvigionatore[0][0]): {
-			ack <- false
-		}
 		case ack := <-canaliApprovvigionatore[0][1]: {
 			dentro = 0
 			ack <- true	 
 		}
-		case ack := <-when(!fine() && approvigionamentoModerna() && dentro == 0,
+		case ack := <-when(approvigionamentoModerna() && dentro == 0,
 		canaliApprovvigionatore[1][0]): {
 			VM = MAXM
 			dentro = 2
 			ack <- true	 
 		}
-		case ack := <-when(fine(),
-		canaliApprovvigionatore[1][0]): {
-			ack <- false
-		}
 		case ack := <-canaliApprovvigionatore[1][1]: {
 			dentro = 0
 			ack <- true	 
 		}
-		case ack := <-when(!fine() && consumo() && dentro != 2,
+		case ack := <-when(consumo() && dentro != 2,
 		canaliConsumatore[0][0]): {
 			if turno { 
 				DP += Q
@@ -141,16 +140,12 @@ func deposito() {
 			dentro = 1
 			ack <- true	 
 		}
-		case ack := <-when(fine(),
-		canaliConsumatore[0][0]): {
-			ack <- false
-		}
 		case ack := <-canaliConsumatore[0][1]: {
 			consumatori--
 			if consumatori == 0 { dentro = 0}
 			ack <- true	 
 		}
-		case ack := <-when(!fine() && consumo() && dentro != 2 &&
+		case ack := <-when(consumo() && dentro != 2 &&
 		priorità(canaliConsumatore[0][0]),
 		canaliConsumatore[1][0]): {
 			if turno { 
@@ -165,16 +160,12 @@ func deposito() {
 			dentro = 1
 			ack <- true	 
 		}
-		case ack := <-when(fine(),
-		canaliConsumatore[1][0]): {
-			ack <- false
-		}
 		case ack := <-canaliConsumatore[1][1]: {
 			consumatori--
 			if consumatori == 0 { dentro = 0}
 			ack <- true	 
 		}
-		case ack := <-when(!fine() && consumo() && dentro != 2 &&
+		case ack := <-when(consumo() && dentro != 2 &&
 		priorità(canaliConsumatore[0][0], canaliConsumatore[1][0]),
 		canaliConsumatore[2][0]): {
 			if turno { 
@@ -189,19 +180,10 @@ func deposito() {
 			dentro = 1
 			ack <- true	 
 		}
-		case ack := <-when(fine(),
-		canaliConsumatore[2][0]): {
-			ack <- false
-		}
 		case ack := <-canaliConsumatore[2][1]: {
 			consumatori--
 			if consumatori == 0 { dentro = 0}
 			ack <- true	 
-		}
-		case <-terminaDeposito: {
-			finito <- true
-			fmt.Printf("[%s] fine\n", nome)
-			return
 		}}
 	}
 }
@@ -222,7 +204,6 @@ func approvvigionatore(id int, tipo int) {
 			canaliApprovvigionatore[tipo][i] <- ack
 			continua = <-ack
 			if !continua {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
 				return
 			}
@@ -246,17 +227,14 @@ func consumatore(id int, tipo int) {
 		canaliConsumatore[tipo][i] <- ack
 		continua = <-ack
 			if !continua {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
 				return
 			}
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
 }
-
 
 func main() {
 	fmt.Println("[MAIN] inizio")
@@ -266,9 +244,6 @@ func main() {
 	for i := 0; i < NUM_APPROVVIGIONATORI; i++ { go approvvigionatore(i, i % 2) }
 	for i := 0; i < NUM_CONSUMATORI; i++ { go consumatore(i, i % 3) }
 	
-	for i := 0; i < NUM_CONSUMATORI; i++ { <-finito }
-	for i := 0; i < NUM_APPROVVIGIONATORI; i++ { <-finito }
-	terminaDeposito <- true
 	<-finito
 	
 	fmt.Println("[MAIN] fine")
