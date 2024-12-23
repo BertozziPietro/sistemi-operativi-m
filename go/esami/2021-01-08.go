@@ -4,210 +4,272 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
-const NREG = 20
-const maxP = 300 //max vaccini VP nel deposito
-const maxM = 100 //max vacciniVM nel deposito
-const tipoVP = 0
-const tipoVM = 1
-const NL = 40     // numero dosi in un lotto
-const Q = 50      //numero dosi richieste da ogni regione
-const Ncicli = 10 //iterazioni per regione
-const Rossa = 0
-const Arancione = 1
-const Gialla = 2
-const TOTP = 10
-const TOTM = 8
+const (
+	MAXP     = 20
+	MAXM     = 20
+	TOTP     = 100
+	TOTM     = 100
+	NL       = 6
+	Q        = 3
+	MAX_BUFF = 50
 
-var tipoVaccino = [2]string{"Pfizer-BionTech", "Moderna"}
-var tipoRegione = [20]string{"Valle D'aosta", "Piemonte", "Lombardia", "Veneto", "Friuli V.G.", "Trentino Alto Adige",
-	"Liguria", "Toscana", "Emilia Romagna", "Marche", "Umbria", "Lazio", "Abruzzo", "Molise", "Campania", "Basilicata",
-	"Puglia", "Calabria", "Sicilia", "Sardegna"}
+	NUM_APPROVVIGIONATORI = 2
+	NUM_CONSUMATORI       = 90
+	
+	TEMPO_MINIMO            = 500
+	TEMPO_APPROVVIGIONATORE = 1000
+	TEMPO_CONSUMATORE       = 1000
+	
+	AZIONI_APPROVVIGIONATORE = 2
+	AZIONI_CONSUMATORE       = 2
+	
+	TIPI_APPROVVIGIONATORE = 2
+	TIPI_CONSUMATORE       = 3
+)
 
-var done = make(chan bool)
-var termina = make(chan bool)
-var terminaDeposito = make(chan bool)
+var (
+	canaliApprovvigionatore = [TIPI_APPROVVIGIONATORE][AZIONI_APPROVVIGIONATORE]chan chan bool{
+					         {make(chan chan bool), make(chan chan bool)},
+					         {make(chan chan bool), make(chan chan bool)}}
+	
+	canaliConsumatore = [TIPI_CONSUMATORE][AZIONI_CONSUMATORE]chan chan bool{
+					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
+					
+	finito           = make(chan bool, MAX_BUFF)
+	bloccaDeposito   = make(chan bool)
+	terminaDeposito  = make(chan bool)
+)
 
-//canali usati dalle regioni  per prelevare vaccini dal deposito
-var prelievo [3]chan int //0->ross, 1->arancione, 2->gialla
-
-//canali usati dalle aziende per prenotare/depositare lotti di vaccino nel deposito
-var prenota [2]chan int
-var consegna [2]chan int
-
-//canali di ack
-var ack_farm [2]chan int   // canale di ack per le case farmaceutiche
-var ack_reg [NREG]chan int // canale di ack per le regioni
-
-func when(b bool, c chan int) chan int {
-	if !b {
-		return nil
+func lunghezzeCanaliInMatrice(canali [][]chan chan bool) [][]int {
+	lunghezze := make([][]int, len(canali))
+	for i, riga := range canali {
+		lunghezze[i] = make([]int, len(riga))
+		for j, c := range riga { lunghezze[i][j] = len(c) }
 	}
+	return lunghezze
+}
+
+func when(b bool, c chan chan bool) chan chan bool {
+	if !b { return nil }
 	return c
 }
 
-func Farma(tipo int) {
-	var tt int
-
-	var goal int
-
-	fmt.Printf("[Azienda %s]: partenza! \n", tipoVaccino[tipo])
-	if tipo == tipoVP {
-		goal = TOTP
-	} else {
-		goal = TOTM
-	}
-
-	for i := 0; i < goal; i++ { // per ogni ciclo..
-		prenota[tipo] <- 1
-		<-ack_farm[tipo]
-		//fmt.Printf("[Azienda %s]: ciclo n. %d ho prenotato! \n", tipoVaccino[tipo], i)
-		tt = (rand.Intn(4) + 1)
-		time.Sleep(time.Duration(tt) * time.Second) //tempo di trasporto ..
-		consegna[tipo] <- 1
-		<-ack_farm[tipo]
-		//fmt.Printf("[Azienda %s]: inserito Lotto n. %d di %d dosi\n", tipoVaccino[tipo], i+1, NL)
-	}
-	fmt.Printf("[Azienda %s]: terminato !\n", tipoVaccino[tipo])
-	done <- true
-	return
-}
-
-func regione(id int) {
-	var zona, tt int
-
-	fmt.Printf("[Regione %s]: partenza! \n", tipoRegione[id])
-
-	for { // per ogni ciclo..
-		zona = rand.Intn(3) // determino la zona
-		//fmt.Printf("[Regione %s]: sono in zona %d! \n", tipoRegione[id], zona)
-		prelievo[zona] <- id //richiedo Q dosi
-		ris := <-ack_reg[id]
-		if ris == -1 {
-			fmt.Printf("[Regione %s]: sono costretta a terminare! \n", tipoRegione[id])
-			done <- true
-			return
-		}
-		tt = (rand.Intn(3) + 1)
-		time.Sleep(time.Duration(tt) * time.Second) //tempo di passaggio al ciclo successivo..
-		//fmt.Printf("[Regione %s]: prelevate %d dosi\n", tipoRegione[id], Q)
-	}
-	fmt.Printf("[Regione %s]: termino!\n", tipoRegione[id])
+func priorità(canali ...chan chan bool) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
 }
 
 func deposito() {
-	var inVP int = 0
-	var inVM int = 0
-	var prenotatiVP = 0
-	var prenotatiVM = 0
-	var reg, VPprel int
-	var fine bool = false
+	const nome = "DEPOSITO"
+	var spazi = strings.Repeat(" ", len(nome) + 3)
+	fmt.Printf("[%s] inizio\n", nome)
+
+	var (
+		VP          = MAXP
+		VM          = MAXM
+		DP          = 0
+		DM          = 0
+		consumatori = 0
+		dentro      = 0
+		turno       = true
+	)
+	
+	fine := func() bool { return DP >= TOTP && DM >= TOTM }
+	
+	approvigionamentoPfizer := func() bool { return VP + NL == MAXP}
+	approvigionamentoModerna := func() bool { return VM + NL == MAXM}
+	
+	consumo := func() bool { return VP + VM >= Q && !approvigionamentoPfizer() && !approvigionamentoModerna()}
+
 	for {
+		var canaliApprovvigionatoreSlice = make([][]chan chan bool, len(canaliApprovvigionatore))
+		for i, row := range canaliApprovvigionatore { canaliApprovvigionatoreSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var canaliConsumatoreSlice = make([][]chan chan bool, len(canaliConsumatore))
+		for i, row := range canaliConsumatore { canaliConsumatoreSlice[i] = append([]chan chan bool(nil), row[:]...) }
+		var (
+			lunghezzeApprovvigionatore = lunghezzeCanaliInMatrice(canaliApprovvigionatoreSlice)
+			lunghezzeConsumatore      = lunghezzeCanaliInMatrice(canaliConsumatoreSlice)
+		)
+		fmt.Printf("[%s] VP: %03d, VM: %03d, DP: %03d, DM: %03d, consumatori: %03d, dentro: %03d, turno: %5t\n%scanaliApprovvigionatore: %v, canaliConsumatore: %v\n",
+		nome, VP, VM, DP, DM, consumatori, dentro, turno, spazi, lunghezzeApprovvigionatore, lunghezzeConsumatore)
+
 		select {
-		case <-when(inVP+prenotatiVP+NL <= maxP, prenota[tipoVP]):
-			prenotatiVP += NL
-			ack_farm[tipoVP] <- 1
-			//fmt.Printf("[deposito]: prenotato lotto VP, ci sono %d VP prenotati e %d VP disponibili\n", prenotatiVP, inVP)
-		case <-when((prenotatiVM+inVM+NL <= maxM), prenota[tipoVM]):
-			prenotatiVM += NL
-			ack_farm[tipoVM] <- 1
-			//fmt.Printf("[deposito]: prenotato lotto VM, ci sono %d VM prenotati e %d VM disponibili\n", prenotatiVM, inVM)
-		case <-consegna[tipoVP]:
-			inVP += NL
-			prenotatiVP -= NL
-			ack_farm[tipoVP] <- 1
-			fmt.Printf("[deposito]: consegnato lotto VP: ora ci sono %d VP  e %d VM disponibili\n", inVP, inVM)
-		case <-consegna[tipoVM]:
-			inVM += NL
-			prenotatiVM -= NL
-			ack_farm[tipoVM] <- 1
-			fmt.Printf("[deposito]: consegnato lotto VM: ora ci sono %d VP  e %d VM disponibili\n", inVP, inVM)
-		case reg = <-when(fine == false && (inVM+inVP >= Q), prelievo[Rossa]): //zona rossa
-			if inVP >= Q {
-				inVP -= Q
-				VPprel = Q
+		case ack := <-when(!fine() && approvigionamentoPfizer() && dentro == 0,
+		canaliApprovvigionatore[0][0]): {
+			VP = MAXP
+			dentro = 2
+			ack <- true	 
+		}
+		case ack := <-when(fine(),
+		canaliApprovvigionatore[0][0]): {
+			ack <- false
+		}
+		case ack := <-canaliApprovvigionatore[0][1]: {
+			dentro = 0
+			ack <- true	 
+		}
+		case ack := <-when(!fine() && approvigionamentoModerna() && dentro == 0,
+		canaliApprovvigionatore[1][0]): {
+			VM = MAXM
+			dentro = 2
+			ack <- true	 
+		}
+		case ack := <-when(fine(),
+		canaliApprovvigionatore[1][0]): {
+			ack <- false
+		}
+		case ack := <-canaliApprovvigionatore[1][1]: {
+			dentro = 0
+			ack <- true	 
+		}
+		case ack := <-when(!fine() && consumo() && dentro != 2,
+		canaliConsumatore[0][0]): {
+			if turno { 
+				DP += Q
+				VP -= Q
 			} else {
-				VPprel = inVP
-				inVP = 0
-				inVM -= (Q - VPprel)
+				DM += Q
+				VM -= Q
 			}
-			ack_reg[reg] <- 1
-			fmt.Printf("[deposito]: regione %s in zona ROSSA ha prelevato %d vaccini VP e %d vaccini VM \n", tipoRegione[reg], VPprel, (Q - VPprel))
-		case reg = <-when(fine == false && (inVM+inVP >= Q) && len(prelievo[Rossa]) == 0, prelievo[Arancione]): //zona arancione
-			if inVP >= Q {
-				inVP -= Q
-				VPprel = Q
+			turno = !turno
+			consumatori++
+			dentro = 1
+			ack <- true	 
+		}
+		case ack := <-when(fine(),
+		canaliConsumatore[0][0]): {
+			ack <- false
+		}
+		case ack := <-canaliConsumatore[0][1]: {
+			consumatori--
+			if consumatori == 0 { dentro = 0}
+			ack <- true	 
+		}
+		case ack := <-when(!fine() && consumo() && dentro != 2 &&
+		priorità(canaliConsumatore[0][0]),
+		canaliConsumatore[1][0]): {
+			if turno { 
+				DP += Q
+				VP -= Q
 			} else {
-				VPprel = inVP
-				inVP = 0
-				inVM -= (Q - VPprel)
+				DM += Q
+				VM -= Q
 			}
-			ack_reg[reg] <- 1
-			fmt.Printf("[deposito]: regione %s In zona ARANCIONE ha prelevato %d vaccini VP e %d vaccini VM \n", tipoRegione[reg], VPprel, (Q - VPprel))
-		case reg = <-when(fine == false && (inVM+inVP >= Q) && len(prelievo[Rossa]) == 0 && len(prelievo[Arancione]) == 0, prelievo[Gialla]): //zona gialla
-			if inVP >= Q {
-				inVP -= Q
-				VPprel = Q
+			turno = !turno
+			consumatori++
+			dentro = 1
+			ack <- true	 
+		}
+		case ack := <-when(fine(),
+		canaliConsumatore[1][0]): {
+			ack <- false
+		}
+		case ack := <-canaliConsumatore[1][1]: {
+			consumatori--
+			if consumatori == 0 { dentro = 0}
+			ack <- true	 
+		}
+		case ack := <-when(!fine() && consumo() && dentro != 2 &&
+		priorità(canaliConsumatore[0][0], canaliConsumatore[1][0]),
+		canaliConsumatore[2][0]): {
+			if turno { 
+				DP += Q
+				VP -= Q
 			} else {
-				VPprel = inVP
-				inVP = 0
-				inVM -= (Q - VPprel)
+				DM += Q
+				VM -= Q
 			}
-			ack_reg[reg] <- 1
-			fmt.Printf("[deposito]: regione %s In zona Gialla ha prelevato %d vaccini VP e %d vaccini VM \n", tipoRegione[reg], VPprel, (Q - VPprel))
-		//terminazione
-		case reg := <-when(fine == true, prelievo[Rossa]):
-			ack_reg[reg] <- -1
-		case reg := <-when(fine == true, prelievo[Arancione]):
-			ack_reg[reg] <- -1
-		case reg := <-when(fine == true, prelievo[Gialla]):
-			ack_reg[reg] <- -1
-		case <-termina:
-			fine = true
-		case <-terminaDeposito:
-			fmt.Printf("[deposito]: termino (ci sono ancora %d dosi di VP e %d dosi di VM)\n", inVP, inVM)
-			done <- true
+			turno = !turno
+			consumatori++
+			dentro = 1
+			ack <- true	 
+		}
+		case ack := <-when(fine(),
+		canaliConsumatore[2][0]): {
+			ack <- false
+		}
+		case ack := <-canaliConsumatore[2][1]: {
+			consumatori--
+			if consumatori == 0 { dentro = 0}
+			ack <- true	 
+		}
+		case <-terminaDeposito: {
+			finito <- true
+			fmt.Printf("[%s] fine\n", nome)
 			return
+		}}
+	}
+}
+
+func approvvigionatore(id int, tipo int) {
+	const nome = "APPROVVIGIONATORE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_APPROVVIGIONATORE]string {"entrare nel deposito", "uscire dal deposito"}
+		continua bool
+	)
+	for {
+		for i, azione := range azioni {
+			time.Sleep(time.Duration(rand.Intn(TEMPO_APPROVVIGIONATORE) + TEMPO_MINIMO) * time.Millisecond)
+			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+			canaliApprovvigionatore[tipo][i] <- ack
+			continua = <-ack
+			if !continua {
+				finito <- true
+				fmt.Printf("[%s %03d] fine\n", nome, id)
+				return
+			}
+			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 		}
 	}
 }
 
+func consumatore(id int, tipo int) {
+	const nome = "CONSUMATORE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		ack = make(chan bool)
+		azioni = [AZIONI_CONSUMATORE]string {"entrare nel deposito", "uscire dal deposito"}
+		continua bool
+	)
+	for i, azione := range azioni {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_CONSUMATORE) + TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+		canaliConsumatore[tipo][i] <- ack
+		continua = <-ack
+			if !continua {
+				finito <- true
+				fmt.Printf("[%s %03d] fine\n", nome, id)
+				return
+			}
+		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
+	}
+	
+	finito <- true
+	fmt.Printf("[%s %03d] fine\n", nome, id)
+}
+
+
 func main() {
+	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
-	fmt.Printf("[main] inizio..\n")
-	// inizializzazioni:
-	for i := 0; i < NREG; i++ {
-		ack_reg[i] = make(chan int, 100)
-	}
-	for i := 0; i < 3; i++ {
-		prelievo[i] = make(chan int, 100)
-	}
-	for i := 0; i < 2; i++ {
-		prenota[i] = make(chan int, 100)
-		consegna[i] = make(chan int, 100)
-		ack_farm[i] = make(chan int, 100)
-	}
-
-	//creazione goroutine
+	
 	go deposito()
-	go Farma(0) //Pfizer
-	go Farma(1) //Moderna
-
-	for i := 0; i < NREG; i++ {
-		go regione(i)
-	}
-	// terminazione
-	for i := 0; i < 2; i++ { //terminazione aziende farmaceutiche
-		<-done
-	}
-	termina <- true
-
-	for i := 0; i < NREG; i++ { //terminazione regioni
-		<-done
-	}
-
+	for i := 0; i < NUM_APPROVVIGIONATORI; i++ { go approvvigionatore(i, i % 2) }
+	for i := 0; i < NUM_CONSUMATORI; i++ { go consumatore(i, i % 3) }
+	
+	for i := 0; i < NUM_CONSUMATORI; i++ { <-finito }
+	for i := 0; i < NUM_APPROVVIGIONATORI; i++ { <-finito }
 	terminaDeposito <- true
-	<-done
-	fmt.Printf("[main] APPLICAZIONE TERMINATA \n")
+	<-finito
+	
+	fmt.Println("[MAIN] fine")
 }
