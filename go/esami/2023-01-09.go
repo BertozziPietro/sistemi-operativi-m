@@ -1,7 +1,9 @@
-//anche qui le risorse sono identificate e singole perchè le macchine possono stare nei posti dei camion quindi devi stare li a capire chi deve stare dove
-//per ora la questione è ignorata e le macchine stanno solo nel posto delle macchine e i camion solo nel posto dei camion
-
 package main
+
+//non seerve introdurre una struttura per i parcheggi
+//sono solo 2 variabili
+//seerve una richiesta complessa che abbia un canale di ack intero
+//cosi ogniuno sa dove ha parcheggiato e può poi uscire DA LI
 
 import (
 	"fmt"
@@ -30,10 +32,10 @@ const (
 
 var (
 	canaliSpazzaneve = [AZIONI_SPAZZANEVE]chan chan bool{
-					 make(chan chan bool),
-					 make(chan chan bool),
-					 make(chan chan bool),
-					 make(chan chan bool)}
+					 make(chan chan bool, MAX_BUFF),
+					 make(chan chan bool, MAX_BUFF),
+					 make(chan chan bool, MAX_BUFF),
+					 make(chan chan bool, MAX_BUFF)}
 	canaliCamper     = [AZIONI_CAMPER]chan chan bool{
 					 make(chan chan bool, MAX_BUFF),
 					 make(chan chan bool, MAX_BUFF),

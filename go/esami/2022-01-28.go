@@ -31,8 +31,8 @@ const (
 
 var (
 	canaliFornitore = [TIPI_FORNITORE][AZIONI_FORNITORE]chan chan bool{
-					{make(chan chan bool), make(chan chan bool)},
-					{make(chan chan bool), make(chan chan bool)}}
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 	
 	canaliAddetto = [TIPI_ADDETTO][AZIONI_ADDETTO]chan chan bool{
 					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},

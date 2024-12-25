@@ -30,14 +30,14 @@ const (
 
 var (
 	canaliNastro = [TIPI_NASTRO]chan chan bool{
-				   make(chan chan bool),
-				   make(chan chan bool),
-				   make(chan chan bool),
-				   make(chan chan bool)}
+				   make(chan chan bool, MAX_BUFF),
+				   make(chan chan bool, MAX_BUFF),
+				   make(chan chan bool, MAX_BUFF),
+				   make(chan chan bool, MAX_BUFF)}
 	
 	canaliRobot = [TIPI_ROBOT][AZIONI_ROBOT]chan chan bool{
-				  {make(chan chan bool), make(chan chan bool)},
-				  {make(chan chan bool), make(chan chan bool)}}
+				  {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+				  {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 					
 	finito              = make(chan bool)
 	bloccaStabilimento  = make(chan bool)
@@ -100,6 +100,8 @@ func stabilimento() {
 		fmt.Printf("[%s] CA: %03d, CB: %03d, PA: %03d, PB: %03d, Ap: %03d, Bp: %03d, A: %03d, B: %03d\n%sCanaliNastro: %v, CanaliRobot: %v,\n",
 		nome, CA, CB, PA, PB, Ap, Bp, A, B, spazi, lunghezzeNastro, lunghezzeRobot)
 		
+		//inesatto sia in questo esercizio che nell altro con la fine strana si deve scegliere una canale per ogni personaggio e bloccare quello e non provarli tutti altrimenti si rischia di alllinearsi male
+		//ma forse posi se è allineato su un altro canale si ferma sull altro canale perchè la select non è in esecuzione...
         if A + B >= TOT {
         	time.Sleep(time.Duration(TEMPO_FINE) * time.Millisecond)
             for _, c := range canaliNastro {  <-c <- false }

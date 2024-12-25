@@ -33,15 +33,15 @@ const (
 
 var (
 	canaliApprovvigionatore = [TIPI_APPROVVIGIONATORE][AZIONI_APPROVVIGIONATORE]chan chan bool{
-					         {make(chan chan bool), make(chan chan bool)},
-					         {make(chan chan bool), make(chan chan bool)}}
+					         {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
+					         {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 	
 	canaliConsumatore = [TIPI_CONSUMATORE][AZIONI_CONSUMATORE]chan chan bool{
 					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
 					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
 					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 					
-	finito           = make(chan bool, MAX_BUFF)
+	finito           = make(chan bool)
 	bloccaDeposito   = make(chan bool)
 	terminaDeposito  = make(chan bool)
 )

@@ -64,12 +64,12 @@ func lunghezzeCanaliInMatrice(canali [][]chan richiesta) [][]int {
 	return lunghezze
 }
 
-func when(b bool, c chan req) chan req {
+func when(b bool, c chan richiesta) chan richiesta {
 	if !b { return nil }
 	return c
 }
 
-func priorità(canali ...chan req) bool {
+func priorità(canali ...chan richiesta) bool {
 	for _, c := range canali { if len(c) > 0 { return false } }
 	return true
 }
@@ -105,6 +105,8 @@ func autolavaggio() {
 			lunghezzeAddetto = lunghezzeCanaliInVettore(canaliAddetto[:])
 			lunghezzeCliente = lunghezzeCanaliInMatrice(canaliClienteSlice)
 		)
+		
+		//print del vettore
 		fmt.Printf("[%s] clientiTunnel: %03d, clientiPI: %03d, fine: %5t\n%sCanaliAddetto: %v, CanaliCliente: %v\n",
 		nome, clientiTunnel, clientiPI, fine, spazi, lunghezzeAddetto, lunghezzeCliente)
 		
@@ -118,7 +120,7 @@ func autolavaggio() {
 		canaliAddetto[0]): {
 			r.ack <- -1
 		}
-		case r := <-when(//non so come fare qui devo esprimere una condizione su r
+		case r := <-when(true,//non so come fare qui devo esprimere una condizione su r
 		canaliAddetto[1]): {
 			tunnels[r.soggetto] = -2
 			r.ack <- 1
@@ -169,8 +171,8 @@ func addetto(id int) {
 		for i, azione := range azioni {
 			time.Sleep(time.Duration(rand.Intn(TEMPO_ADDETTO) + TEMPO_MINIMO) * time.Millisecond)
 			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
-			canaliAddetto[i] <- ack
-			continua = <-ack
+			canaliAddetto[i] <- r
+			continua = <-r.ack
 			if continua < 0 {
 				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
@@ -198,7 +200,7 @@ func cliente(id int, tipo int) {
 			for i := 0; i < AZIONI_CLIENTE; i++ {
 				time.Sleep(time.Duration(rand.Intn(TEMPO_CLIENTE) + TEMPO_MINIMO) * time.Millisecond)
 				r.oggetto = risorsa
-				fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione[t][i])
+				fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azioni[t][i])
 				canaliCliente[t][i] <- r
 				risorsa = <-r.ack
 				if risorsa < 0 {
@@ -206,7 +208,7 @@ func cliente(id int, tipo int) {
 					fmt.Printf("[%s %03d] fine\n", nome, id)
 					return
 				}
-				fmt.Printf("[%s %03d] è il mio turno di %s\n numero %d", nome, id, azione[t][i], risorsa)
+				fmt.Printf("[%s %03d] è il mio turno di %s\n numero %d", nome, id, azioni[t][i], risorsa)
 			}
 		}
 	}

@@ -27,8 +27,8 @@ const (
 
 var (
 	canaliAddetto   = [AZIONI_ADDETTO]chan chan bool{
-					make(chan chan bool),
-					make(chan chan bool)}
+					make(chan chan bool, MAX_BUFF),
+					make(chan chan bool, MAX_BUFF)}
 						
 	canaliCittadino = [TIPI_CITTADINO][AZIONI_CITTADINO]chan chan bool{
 					{make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},

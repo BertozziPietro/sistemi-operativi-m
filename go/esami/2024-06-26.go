@@ -28,8 +28,8 @@ const (
 
 var (
 	canaliUsciere    = [AZIONI_USCIERE]chan chan bool{
-					 make(chan chan bool),
-					 make(chan chan bool)}	
+					 make(chan chan bool, MAX_BUFF),
+					 make(chan chan bool, MAX_BUFF)}	
 
 	canaliDipendente = [AZIONI_DIPENDENTE]chan chan bool{
 					 make(chan chan bool, MAX_BUFF),
