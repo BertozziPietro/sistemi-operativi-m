@@ -22,8 +22,8 @@ const (
 	NUM_PI      = 30
 	NUM_TUNNELS = 10
 
-	NUM_CLIENTI = 100
 	NUM_ADDETTI = 10
+	NUM_CLIENTI = 100
 	
 	TEMPO_MINIMO  = 500
 	TEMPO_ADDETTO = 3000
@@ -82,15 +82,17 @@ func autolavaggio() {
 	var (
 		clientiTunnel = 0
 		clientiPI = 0
-		
 		fine = false
 	)
 	
-    var tunnels [NUM_TUNNELS]int
+	var (
+		tunnels [NUM_TUNNELS]int
+		posticipatiACK [NUM_ADDETTI]chan int
+	)
     for i := range tunnels { tunnels[i] = -2 }
     
 	disponibile := func() int {
-		for i := 0; i < NUM_TUNNELS; i++ { if (tunnels[i] == -1) { return i } }
+		for i := range tunnels { if (tunnels[i] == -1) { return i } }
 		return -1
 	}
 	
@@ -120,10 +122,9 @@ func autolavaggio() {
 		canaliAddetto[0]): {
 			r.ack <- -1
 		}
-		case r := <-when(true,//non so come fare qui devo esprimere una condizione su r
-		canaliAddetto[1]): {
+		case r := <-canaliAddetto[1]: {
 			tunnels[r.soggetto] = -2
-			r.ack <- 1
+			if tunnels[r.soggetto] >= 0 { posticipatiACK[r.soggetto] = r.ack } else { r.ack <- 1 }
 		}
 		case r := <-when(libero() && disponibile() >= 0 &&
 		priorità(canaliAddetto[1], canaliCliente[1][0]),
@@ -134,7 +135,11 @@ func autolavaggio() {
 			r.ack <- oggetto
 		}
 		case r := <-canaliCliente[0][1]: {
-			tunnels[r.oggetto] = -1
+			if posticipatiACK[r.oggetto] != nil {
+				tunnels[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { tunnels[r.oggetto] = -1 }
 			clientiTunnel--
 			r.ack <- 1
 		}
@@ -164,7 +169,7 @@ func addetto(id int) {
 
 	var (
 		r = richiesta { soggetto: id, oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
-		azioni = [AZIONI_ADDETTO]string {"entrare in servizio", " riposare"}
+		azioni = [AZIONI_ADDETTO]string {"entrare in servizio", "riposare"}
 		continua int
 	)
 	for {
@@ -208,7 +213,7 @@ func cliente(id int, tipo int) {
 					fmt.Printf("[%s %03d] fine\n", nome, id)
 					return
 				}
-				fmt.Printf("[%s %03d] è il mio turno di %s\n numero %d", nome, id, azioni[t][i], risorsa)
+				fmt.Printf("[%s %03d] è il mio turno di %s numero %d\n", nome, id, azioni[t][i], risorsa)
 			}
 		}
 	}
