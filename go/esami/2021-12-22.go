@@ -253,8 +253,7 @@ func cliente(id int, tipo int) {
 	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
 	var (
-		risorsa = NON_SIGNIFICATIVO
-		r = richiesta { soggetto: id, oggetto: risorsa, ack: make(chan int) }
+		r = richiesta { soggetto: id, oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
 		azioni = [AZIONI_CLIENTE]string {"chiedere al commesso", "lasciare in pace il commesso"}
 	)
 	
@@ -262,13 +261,12 @@ func cliente(id int, tipo int) {
 		time.Sleep(time.Duration(rand.Intn(TEMPO_CLIENTE) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliCliente[tipo][i] <- r
-		risorsa = <-r.ack
-		if risorsa < 0 {
+		r.oggetto = <-r.ack
+		if r.oggetto < 0 {
 			finito <- true
 			fmt.Printf("[%s %03d] fine\n", nome, id)
 			return
 		}
-		r.oggetto = risorsa
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	

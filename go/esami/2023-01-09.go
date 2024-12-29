@@ -1,10 +1,5 @@
 package main
 
-//non seerve introdurre una struttura per i parcheggi
-//sono solo 2 variabili
-//seerve una richiesta complessa che abbia un canale di ack intero
-//cosi ogniuno sa dove ha parcheggiato e può poi uscire DA LI
-
 import (
 	"fmt"
 	"math/rand"
@@ -12,10 +7,17 @@ import (
 	"strings"
 )
 
+type richiesta struct {
+	oggetto int
+	ack chan int
+}
+
 const (
+	NON_SIGNIFICATIVO = -1
+
 	NS       = 10
 	NM       = 10
-	MAX_BUFF = 30
+	MAX_BUFF = 100
 
 	NUM_CAMPER = 50
 	NUM_AUTO   = 50
@@ -31,39 +33,39 @@ const (
 )
 
 var (
-	canaliSpazzaneve = [AZIONI_SPAZZANEVE]chan chan bool{
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF)}
-	canaliCamper     = [AZIONI_CAMPER]chan chan bool{
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF)}
-	canaliAuto       = [AZIONI_AUTO]chan chan bool{
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF),
-					 make(chan chan bool, MAX_BUFF)}
+	canaliSpazzaneve = [AZIONI_SPAZZANEVE]chan richiesta{
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF)}
+	canaliCamper     = [AZIONI_CAMPER]chan richiesta{
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF)}
+	canaliAuto       = [AZIONI_AUTO]chan richiesta{
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF)}
 
 	finito          = make(chan bool, MAX_BUFF)
 	bloccaCastello  = make(chan bool)
 	terminaCastello = make(chan bool)
 )
 
-func lunghezze(canali []chan chan bool) []int {
+func lunghezze(canali []chan richiesta) []int {
 	lunghezze := make([]int, len(canali))
 	for i, c := range canali { lunghezze[i] = len(c) }
 	return lunghezze
 }
 
-func when(b bool, c chan chan bool) chan chan bool {
+func when(b bool, c chan richiesta) chan richiesta {
 	if !b { return nil }
 	return c
 }
 
-func priorità(canali ...chan chan bool) bool {
+func priorità(canali ...chan richiesta) bool {
 	for _, c := range canali { if len(c) > 0 { return false } }
 	return true
 }
@@ -74,14 +76,18 @@ func castello() {
 	fmt.Printf("[%s] inizio\n", nome)
 
 	var (
-		liberiM = NS
-		liberiS = NM
 		spazzaneve = false
 		camper = 0
 		auto = 0
 		direzione = 0
 		fine = false
 	)
+	var parcheggiLiberi[2]int
+	parcheggiLiberi[0] = NS
+	parcheggiLiberi[1] = NM
+	
+	parcheggioAuto := func() bool { return parcheggiLiberi[0] + parcheggiLiberi[1] > 0 }
+	parcheggioCamper := func() bool { return parcheggiLiberi[1] > 0 }
 	
 	vuota := func() bool { return camper + auto == 0 }
 
@@ -91,76 +97,81 @@ func castello() {
 			lunghezzeCamper    = lunghezze(canaliCamper[:])
 			lunghezzeAuto      = lunghezze(canaliAuto[:])
 		)
-		fmt.Printf("[%s] LiberiM: %03d, LiberiS: %03d, Spazzaneve: %5t, Camper: %03d, Auto: %03d, Direzione: %03d, Fine: %5t\n%sCanaliSpazzaneve: %v, CanaliCamper: %v, CanaliAuto: %v\n",
-		nome, liberiM, liberiS, spazzaneve, camper, auto, direzione, fine, spazi, lunghezzeSpazaneve, lunghezzeCamper, lunghezzeAuto)
+		fmt.Printf("[%s] Spazzaneve: %5t, Camper: %03d, Auto: %03d, Direzione: %03d, Fine: %5t\n%sVettoreParcheggiLiberi: %v\n%sCanaliSpazzaneve: %v, CanaliCamper: %v, CanaliAuto: %v\n",
+		nome, spazzaneve, camper, auto, direzione, fine, spazi, parcheggiLiberi, spazi, lunghezzeSpazaneve, lunghezzeCamper, lunghezzeAuto)
 		
 		select {
-		case ack := <-when(!fine && vuota(),
+		case r := <-when(!fine && vuota(),
 		canaliSpazzaneve[0]): {
 			spazzaneve = true
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-when(fine,
+		case r := <-when(fine,
 		canaliSpazzaneve[0]): {
-			ack <- false
+			r.ack <- -1
 		}
-		case ack := <-canaliSpazzaneve[1]: {
+		case r := <-canaliSpazzaneve[1]: {
 			spazzaneve = false
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-when(vuota() &&
+		case r := <-when(vuota() &&
 		priorità(canaliSpazzaneve[0], canaliCamper[2], canaliAuto[2], canaliCamper[0], canaliAuto[0]),
 		canaliSpazzaneve[2]): {
 			spazzaneve = true
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-canaliSpazzaneve[3]: {
+		case r := <-canaliSpazzaneve[3]: {
 			spazzaneve = false
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-when(!spazzaneve && direzione != -1 && liberiM > 0 &&
+		case r := <-when(!spazzaneve && direzione != -1 && parcheggioCamper() &&
 		priorità(canaliSpazzaneve[0], canaliCamper[2], canaliAuto[2]),
 		canaliCamper[0]): {
-			liberiM--
+			parcheggiLiberi[1]--
 			camper++
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-canaliCamper[1]: {
+		case r := <-canaliCamper[1]: {
 			camper--
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-when(!spazzaneve && direzione != 1 &&
+		case r := <-when(!spazzaneve && direzione != 1 &&
 		priorità(canaliSpazzaneve[0]),
 		canaliCamper[2]): {
-			liberiM++
+			parcheggiLiberi[1]++
 			camper++
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-canaliCamper[3]: {
+		case r := <-canaliCamper[3]: {
 			camper--
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-when(!spazzaneve && direzione != -1 && liberiS > 0 &&
+		case r := <-when(!spazzaneve && direzione != -1 && parcheggioAuto() &&
 		priorità(canaliSpazzaneve[0], canaliCamper[2], canaliAuto[2], canaliCamper[0]),
 		canaliAuto[0]): {
-			liberiS--
 			auto++
-			ack <- true
+			if parcheggiLiberi[0] > 0 {
+				parcheggiLiberi[0]--
+				r.ack <- 0
+			} else {
+				parcheggiLiberi[1]--
+				r.ack <- 1
+			}
 		}
-		case ack := <-canaliAuto[1]: {
+		case r := <-canaliAuto[1]: {
 			auto--
-			ack <- true
+			r.ack <- 1
 		}
-		case ack := <-when(!spazzaneve && direzione != 1 &&
+		case r := <-when(!spazzaneve && direzione != 1 &&
 		priorità(canaliSpazzaneve[0], canaliCamper[2]),
 		canaliAuto[2]): {
-			liberiS++
 			auto++
-			ack <- true
+			parcheggiLiberi[r.oggetto]++
+			r.ack <- 1
 		}
-		case ack := <-canaliAuto[3]: {
+		case r := <-canaliAuto[3]: {
 			auto--
-			ack <- true
+			r.ack <- 1
 		}
 		case <-bloccaCastello: {
 			fine = true
@@ -178,17 +189,17 @@ func spazzaneve(id int) {
 	fmt.Printf("[%s %03d] inizio\n", nome, id)
 
 	var (
-		ack = make(chan bool)
+		r = richiesta { oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
 		azioni = [AZIONI_SPAZZANEVE]string {"scendere per la strada", "sostare al bar", "salire per la strada", "sostare al castello"}
-		continua bool
+		continua int
 	)
 	for {
 		for i, azione := range azioni {
 			time.Sleep(time.Duration(rand.Intn(TEMPO_SPAZZANEVE) + TEMPO_MINIMO) * time.Millisecond)
 			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
-			canaliSpazzaneve[i] <- ack
-			continua = <-ack
-			if !continua {
+			canaliSpazzaneve[i] <- r
+			continua = <-r.ack
+			if continua < 0 {
 				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
 				return
@@ -203,14 +214,14 @@ func camper(id int) {
 	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
 	var (
-		ack = make(chan bool)
+		r = richiesta { oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
 		azioni = [AZIONI_CAMPER]string{"salire per la strada", "sostare al castello", "scendere per la strada", "tornare a casa"}
 	)
 	for i, azione := range azioni {
 		time.Sleep(time.Duration(rand.Intn(TEMPO_CAMPER) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
-		canaliCamper[i] <- ack
-		<-ack
+		canaliCamper[i] <- r
+		<-r.ack
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
@@ -223,14 +234,14 @@ func auto(id int) {
 	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
 	var (
-		ack = make(chan bool)
+		r = richiesta { oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
 		azioni = [AZIONI_AUTO]string {"salire per la strada", "sostare al castello", "scendere per la strada", "tornare a casa"}
 	)
 	for i, azione := range azioni {
 		time.Sleep(time.Duration(rand.Intn(TEMPO_AUTO) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
-		canaliAuto[i] <- ack
-		<-ack
+		canaliAuto[i] <- r
+		if i == 0 { r.oggetto = <-r.ack } else { <-r.ack }
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
