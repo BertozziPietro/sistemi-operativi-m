@@ -4,185 +4,297 @@ import (
 	"fmt"
 	"math/rand"
 	"time"
+	"strings"
 )
 
-// Costanti generali
-const NUFF = 5  // numero uffici (e consulenti)
-const MAXS = 10 //capacità sala attesa
-const N_UTENTI = 100
-
-const MAXBUF = 50
-
-// Costanti relative alla priorità nella gestione della sala d'attesa
-const TIPI_UT = 3
-const amm = 0
-const priv_solo = 1
-const priv_accomp = 2
-
-// Costanti relative alla priorità nella gestione degli uffici
-const TIPI_FIN = 2
-const Superbonus = 0
-const Altro = 1
-
-// Tipi
-type descrUtente struct {
-	id    int
-	tipoU int // tipo dell'utente richiedente(amministratore, propr, ecc)
-	tipoF int // tipo del finanziamento
-	reply chan int
+type richiesta struct {
+	soggetto int
+	oggetto int
+	ack chan int
 }
 
-// Canali di comunicazione generali
-var termina chan bool
-var done chan bool
+const (
+	NON_SIGNIFICATIVO = -1
 
-// Canali :
-var entraSala [TIPI_UT]chan descrUtente
-var entraUfficio [TIPI_FIN]chan descrUtente
-var esceUfficio chan int
+	MAXS     = 30
+	MAX_BUFF = 100
+	
+	NUM_UFFICI = 10
 
-func sleepRandom() {
-	time.Sleep(time.Duration(1e9 * ((rand.Intn(30)) + 1)))
+	NUM_CONSULENTI     = 10
+	NUM_AMMINISTRATORE = 50
+	NUM_PROPRIETARIO   = 100
+	
+	TEMPO_MINIMO         = 500
+	TEMPO_CONSULENTE     = 3000
+	TEMPO_AMMINISTRATORE = 1000
+	TEMPO_PROPRIETARIO   = 1000
+	
+	AZIONI_CONSULENTE = 2
+	AZIONI_AMMINISTRATORE = 3
+	AZIONI_PROPRIETARIO = 3
+	
+	TIPI_PROPRIETARIO = 2
+)
+
+var (
+	canaliConsulente = [AZIONI_CONSULENTE]chan richiesta{
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF)}
+					 
+	canaliAmministratore = [AZIONI_AMMINISTRATORE]chan richiesta{
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF),
+					 make(chan richiesta, MAX_BUFF)}
+					
+	canaliProprietario = [TIPI_PROPRIETARIO][AZIONI_PROPRIETARIO]chan richiesta{
+					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)},
+					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)}}
+
+	finito         = make(chan bool, MAX_BUFF)
+	bloccaFiliale  = make(chan bool)
+	terminaFiliale = make(chan bool)
+)
+
+func lunghezzeCanaliInVettore(canali []chan richiesta) []int {
+	lunghezze := make([]int, len(canali))
+	for i, c := range canali { lunghezze[i] = len(c) }
+	return lunghezze
 }
 
-func when(condition bool, ch chan descrUtente) chan descrUtente {
-	if !condition {
-		return nil
+func lunghezzeCanaliInMatrice(canali [][]chan richiesta) [][]int {
+	lunghezze := make([][]int, len(canali))
+	for i, riga := range canali {
+		lunghezze[i] = make([]int, len(riga))
+		for j, c := range riga { lunghezze[i][j] = len(c) }
 	}
-	return ch
+	return lunghezze
 }
 
-func server() {
-	var i int
-	personeInSalaAttesa := 0
-	ufficiOccupati := 0
-	var ufficioOccupato [NUFF]bool
-	for i = 0; i < NUFF; i++ {
-		ufficioOccupato[i] = false
-	}
+func when(b bool, c chan richiesta) chan richiesta {
+	if !b { return nil }
+	return c
+}
 
-	fmt.Printf("Il servizio di consulenza è aperto.\n\n")
+func priorità(canali ...chan richiesta) bool {
+	for _, c := range canali { if len(c) > 0 { return false } }
+	return true
+}
+
+func filiale() {
+	const nome = "FILIALE"
+	var spazi = strings.Repeat(" ", len(nome) + 3)
+	fmt.Printf("[%s] inizio\n", nome)
+
+	var (
+		soli = 0
+		accompagnati = 0
+		fine = false
+	)
+	
+	var (
+		uffici [NUM_UFFICI]int
+		posticipatiACK [NUM_CONSULENTI]chan int
+	)
+	for i := range uffici { uffici[i] = -2 }
+	
+	disponibile := func() int {
+		for i := range uffici { if (uffici[i] == -1) { return i } }
+		return -1
+	}
+	
+	libera := func(aggiunti int) bool { return soli + 2 * accompagnati + aggiunti <= MAXS }
+
 	for {
-		select {
-		case richiesta := <-when(personeInSalaAttesa < MAXS, entraSala[amm]):
-			personeInSalaAttesa += 1
-			fmt.Printf("SERVER: entrato amministratore %d.\n", richiesta.id)
-			richiesta.reply <- 1
-		case richiesta := <-when(personeInSalaAttesa < MAXS && len(entraSala[amm]) == 0, entraSala[priv_solo]):
-			personeInSalaAttesa += 1
-			fmt.Printf("SERVER:entrato privato da solo %d.\n", richiesta.id)
-			richiesta.reply <- 1
-		case richiesta := <-when(personeInSalaAttesa+2 <= MAXS && len(entraSala[amm]) == 0 && len(entraSala[priv_solo]) == 0, entraSala[priv_accomp]):
-			personeInSalaAttesa += 2
-			fmt.Printf("SERVER: entrato privato con accompagnatore %d.\n", richiesta.id)
-			richiesta.reply <- 1
-		case richiesta := <-when(ufficiOccupati < NUFF, entraUfficio[Superbonus]):
-			for i = 0; i < NUFF; i++ { //individuazione ufficio da occupare
-				if !ufficioOccupato[i] {
-					break
-				}
-			}
-			ufficioOccupato[i] = true
-			ufficiOccupati++
-			if richiesta.tipoU == priv_accomp {
-				personeInSalaAttesa -= 2 //libero 2 posti in sala d'attesa
-				fmt.Printf("SERVER: il privato con accompagnatore per superbonus   %d è entrato nell'ufficio %d.\n", richiesta.id, i)
-			} else {
-				personeInSalaAttesa -= 1 //libero 1 posto in sala d'attesa
-				if richiesta.tipoU == amm {
-					fmt.Printf("SERVER: l'amministratore per superbonus  %d è entrato nell'ufficio %d.\n", richiesta.id, i)
-				} else {
-					fmt.Printf("SERVER: privato singolo per superbonus  %d è entrato nell'ufficio %d.\n", richiesta.id, i)
-				}
-			}
-			richiesta.reply <- i
-		case richiesta := <-when(ufficiOccupati < NUFF && len(entraUfficio[Superbonus]) == 0, entraUfficio[Altro]):
-			for i = 0; i < NUFF; i++ { //individuazione ufficio da occupare
-				if !ufficioOccupato[i] {
-					break
-				}
-			}
-			ufficioOccupato[i] = true
-			ufficiOccupati++
-			if richiesta.tipoU == priv_accomp {
-				personeInSalaAttesa -= 2 //libero 2 posti in sala d'attesa
-				fmt.Printf("SERVER: il privato con accompagnatore per Altro   %d è entrato nell'ufficio %d.\n", richiesta.id, i)
-			} else {
-				personeInSalaAttesa -= 1 //libero 1 posto in sala d'attesa
-				if richiesta.tipoU == amm {
-					fmt.Printf("SERVER: l'amministratore per Altro  %d è entrato nell'ufficio %d.\n", richiesta.id, i)
-				} else {
-					fmt.Printf("SERVER: privato singolo per Altro  %d è entrato nell'ufficio %d.\n", richiesta.id, i)
-				}
-			}
-			richiesta.reply <- i
-		case rilascio := <-esceUfficio:
-			ufficioOccupato[rilascio] = false
-			ufficiOccupati--
+		var canaliProprietarioSlice = make([][]chan richiesta, len(canaliProprietario))
+		for i, row := range canaliProprietario { canaliProprietarioSlice[i] = append([]chan richiesta(nil), row[:]...) }
+		var (
+			lunghezzeConsulente     = lunghezzeCanaliInVettore(canaliConsulente[:])
+			lunghezzeAmministratore = lunghezzeCanaliInVettore(canaliAmministratore[:])
+			lunghezzeProprietario   = lunghezzeCanaliInMatrice(canaliProprietarioSlice)
+		)
+		
+		fmt.Printf("[%s] soli: %03d, accompagnati: %03d, fine: %5t\n%sVettoreUffici: %v\n%sCanaliConsulente: %v, CanaliAmministratore: %v, CanaliProprietario: %v\n",
+		nome, soli, accompagnati, fine, spazi, uffici, spazi, lunghezzeConsulente, lunghezzeAmministratore, lunghezzeProprietario)
 
-		case <-termina:
-			fmt.Printf("Il servizio di consulenza chiude.\n")
-			done <- true
+	select {
+		case r := <-when(!fine,
+		canaliConsulente[0]): {
+			uffici[r.soggetto] = -1
+			r.ack <- 1
+		}
+		case r := <-when(fine,
+		canaliConsulente[0]): {
+			r.ack <- -1
+		}
+		case r := <-canaliConsulente[1]: {
+			uffici[r.soggetto] = -2
+			if uffici[r.soggetto] >= 0 { posticipatiACK[r.soggetto] = r.ack } else { r.ack <- 1 }
+		}
+		case r := <-when(libera(1),
+		canaliAmministratore[0]): {
+			soli++
+			r.ack <- 1
+		}
+		case r := <-when(disponibile() >= 0,
+		canaliAmministratore[1]): {
+			var oggetto = disponibile()
+			uffici[oggetto] = r.soggetto
+			soli--
+			r.ack <- oggetto
+		}
+		case r := <-canaliAmministratore[2]: {
+			if posticipatiACK[r.oggetto] != nil {
+				uffici[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { uffici[r.oggetto] = -1 }
+			r.ack <- 1
+		}
+		case r := <-when(libera(1) &&
+		priorità(canaliAmministratore[0]),
+		canaliProprietario[0][0]): {
+			soli++
+			r.ack <- 1
+		}
+		case r := <-when(disponibile() >= 0 &&
+		priorità(canaliAmministratore[1]),
+		canaliProprietario[0][1]): {
+			var oggetto = disponibile()
+			uffici[oggetto] = r.soggetto
+			soli--
+			r.ack <- oggetto
+		}
+		case r := <-canaliProprietario[0][2]: {
+			if posticipatiACK[r.oggetto] != nil {
+				uffici[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { uffici[r.oggetto] = -1 }
+			r.ack <- 1
+		}
+		case r := <-when(libera(2) &&
+		priorità(canaliAmministratore[0], canaliProprietario[0][0]),
+		canaliProprietario[1][0]): {
+			soli += 2
+			r.ack <- 1
+		}
+		case r := <-when(disponibile() >= 0 &&
+		priorità(canaliAmministratore[1], canaliProprietario[0][1]),
+		canaliProprietario[1][1]): {
+			var oggetto = disponibile()
+			uffici[oggetto] = r.soggetto
+			soli -= 2
+			r.ack <- oggetto
+		}
+		case r := <-canaliProprietario[1][2]: {
+			if posticipatiACK[r.oggetto] != nil {
+				uffici[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { uffici[r.oggetto] = -1 }
+			r.ack <- 1
+		}
+		case <-bloccaFiliale: {
+			fine = true
+		}
+		case <-terminaFiliale: {
+			finito <- true
+			fmt.Printf("[%s] fine\n", nome)
 			return
+		}}
+	}
+}
+
+func consulente(id int) {
+	const nome = "CONSULENTE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+
+	var (
+		r = richiesta { soggetto: id, oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
+		azioni = [AZIONI_CONSULENTE]string {"entrare in servizio", "riposare"}
+		continua int
+	)
+	for {
+		for i, azione := range azioni {
+			time.Sleep(time.Duration(rand.Intn(TEMPO_CONSULENTE) + TEMPO_MINIMO) * time.Millisecond)
+			fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
+			canaliConsulente[i] <- r
+			continua = <-r.ack
+			if continua < 0 {
+				finito <- true
+				fmt.Printf("[%s %03d] fine\n", nome, id)
+				return
+			}
+			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 		}
 	}
 }
 
-func utente(id int) {
+func amministratore(id int) {
+	const nome = "AMMINISTRATORE"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		r = richiesta { soggetto: id, oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
+		azioni = [AZIONI_AMMINISTRATORE]string {"entrare nell'ufficio", "tornare a casa"}
+	)
+	for i := 0; i < AZIONI_AMMINISTRATORE; i++ {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_AMMINISTRATORE) + TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azioni[i])
+		canaliAmministratore[i] <- r
+		r.oggetto = <-r.ack
+		if r.oggetto < 0 {
+			finito <- true
+			fmt.Printf("[%s %03d] fine\n", nome, id)
+			return
+		}
+		fmt.Printf("[%s %03d] è il mio turno di %s numero %d\n", nome, id, azioni[i], r.oggetto)
+	}
+	
+	finito <- true
+	fmt.Printf("[%s %03d] fine\n", nome, id)
+}
 
-	tipo_ut := rand.Intn(TIPI_UT)   // amministratore, singolo o accompagnato
-	tipo_fin := rand.Intn(TIPI_FIN) //tipo di finanziamento
-	var ack = make(chan int)
-	var richiesta descrUtente
-
-	richiesta.id = id
-	richiesta.tipoU = tipo_ut
-	richiesta.tipoF = tipo_fin
-	richiesta.reply = ack
-
-	sleepRandom()
-
-	entraSala[tipo_ut] <- richiesta
-	<-richiesta.reply
-
-	entraUfficio[tipo_fin] <- richiesta
-	ottenuto := <-richiesta.reply
-
-	sleepRandom()
-
-	esceUfficio <- ottenuto
-
-	fmt.Printf("Utente [%d]: sono uscito dall'ufficio %d. Termino.\n", id, ottenuto)
-	done <- true
-	return
+func proprietario(id int, tipo int) {
+	const nome = "PROPRIETARIO"
+	fmt.Printf("[%s %03d] inizio\n", nome, id)
+	
+	var (
+		r = richiesta { soggetto: id, oggetto: NON_SIGNIFICATIVO, ack: make(chan int) }
+		azioni = [AZIONI_PROPRIETARIO]string {"entrare nell'ufficio", "tornare a casa"}
+	)
+	for i := 0; i < AZIONI_PROPRIETARIO; i++ {
+		time.Sleep(time.Duration(rand.Intn(TEMPO_PROPRIETARIO) + TEMPO_MINIMO) * time.Millisecond)
+		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azioni[i])
+		canaliProprietario[tipo][i] <- r
+		r.oggetto = <-r.ack
+		if r.oggetto < 0 {
+			finito <- true
+			fmt.Printf("[%s %03d] fine\n", nome, id)
+			return
+		}
+		fmt.Printf("[%s %03d] è il mio turno di %s numero %d\n", nome, id, azioni[i], r.oggetto)
+	}
+	
+	finito <- true
+	fmt.Printf("[%s %03d] fine\n", nome, id)
 }
 
 func main() {
-
-	rand.Seed(time.Now().UnixNano())
-	// Generali
-	termina = make(chan bool)
-	done = make(chan bool)
-
-	// inizializzazione canali
-	for i := 0; i < 3; i++ {
-		entraSala[i] = make(chan descrUtente, MAXBUF)
-	}
-
-	// Ambulatorio
-	for i := 0; i < 2; i++ {
-		entraUfficio[i] = make(chan descrUtente, MAXBUF)
-	}
-	esceUfficio = make(chan int, MAXBUF)
-
-	go server()
-
-	for id := 0; id < N_UTENTI; id++ {
-		go utente(id)
-	}
-	for id := 0; id < N_UTENTI; id++ {
-		<-done
-	}
-	termina <- true
-	<-done
+	fmt.Println("[MAIN] inizio")
+	rand.Seed(time.Now().Unix())
+	
+	go filiale()
+	for i := 0; i < NUM_CONSULENTI; i++ { go consulente(i) }
+	for i := 0; i < NUM_AMMINISTRATORE; i++ { go amministratore(i) }
+	for i := 0; i < NUM_PROPRIETARIO; i++ { go proprietario(i, i % 2) }
+	
+	for i := 0; i < NUM_AMMINISTRATORE + NUM_PROPRIETARIO; i++ { <-finito }
+	bloccaFiliale <- true
+	for i := 0; i < NUM_CONSULENTI; i++ { <-finito }
+	terminaFiliale <- true
+	<-finito
+	
+	fmt.Println("[MAIN] fine")
 }
