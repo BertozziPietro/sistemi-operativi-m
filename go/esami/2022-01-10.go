@@ -22,8 +22,8 @@ const (
 	NUM_UFFICI = 10
 
 	NUM_CONSULENTI     = 10
-	NUM_AMMINISTRATORE = 50
-	NUM_PROPRIETARIO   = 100
+	NUM_AMMINISTRATORE = 60
+	NUM_PROPRIETARIO   = 120
 	
 	TEMPO_MINIMO         = 500
 	TEMPO_CONSULENTE     = 3000
@@ -34,7 +34,8 @@ const (
 	AZIONI_AMMINISTRATORE = 3
 	AZIONI_PROPRIETARIO = 3
 	
-	TIPI_PROPRIETARIO = 2
+	TIPI_AMMINISTRATORE = 2
+	TIPI_PROPRIETARIO = 4
 )
 
 var (
@@ -42,12 +43,13 @@ var (
 					 make(chan richiesta, MAX_BUFF),
 					 make(chan richiesta, MAX_BUFF)}
 					 
-	canaliAmministratore = [AZIONI_AMMINISTRATORE]chan richiesta{
-					 make(chan richiesta, MAX_BUFF),
-					 make(chan richiesta, MAX_BUFF),
-					 make(chan richiesta, MAX_BUFF)}
+	canaliAmministratore = [TIPI_AMMINISTRATORE][AZIONI_AMMINISTRATORE]chan richiesta{
+					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)},
+					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)}}
 					
 	canaliProprietario = [TIPI_PROPRIETARIO][AZIONI_PROPRIETARIO]chan richiesta{
+					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)},
+					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)},
 					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)},
 					{make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF), make(chan richiesta, MAX_BUFF)}}
 
@@ -106,11 +108,13 @@ func filiale() {
 	libera := func(aggiunti int) bool { return soli + 2 * accompagnati + aggiunti <= MAXS }
 
 	for {
+		var canaliAmministratoreSlice = make([][]chan richiesta, len(canaliAmministratore))
+		for i, row := range canaliAmministratore { canaliAmministratoreSlice[i] = append([]chan richiesta(nil), row[:]...) }
 		var canaliProprietarioSlice = make([][]chan richiesta, len(canaliProprietario))
 		for i, row := range canaliProprietario { canaliProprietarioSlice[i] = append([]chan richiesta(nil), row[:]...) }
 		var (
 			lunghezzeConsulente     = lunghezzeCanaliInVettore(canaliConsulente[:])
-			lunghezzeAmministratore = lunghezzeCanaliInVettore(canaliAmministratore[:])
+			lunghezzeAmministratore = lunghezzeCanaliInMatrice(canaliAmministratoreSlice)
 			lunghezzeProprietario   = lunghezzeCanaliInMatrice(canaliProprietarioSlice)
 		)
 		
@@ -132,18 +136,39 @@ func filiale() {
 			if uffici[r.soggetto] >= 0 { posticipatiACK[r.soggetto] = r.ack } else { r.ack <- 1 }
 		}
 		case r := <-when(libera(1),
-		canaliAmministratore[0]): {
+		canaliAmministratore[0][0]): {
 			soli++
 			r.ack <- 1
 		}
 		case r := <-when(disponibile() >= 0,
-		canaliAmministratore[1]): {
+		canaliAmministratore[0][1]): {
 			var oggetto = disponibile()
 			uffici[oggetto] = r.soggetto
 			soli--
 			r.ack <- oggetto
 		}
-		case r := <-canaliAmministratore[2]: {
+		case r := <-canaliAmministratore[0][2]: {
+			if posticipatiACK[r.oggetto] != nil {
+				uffici[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { uffici[r.oggetto] = -1 }
+			r.ack <- 1
+		}
+		case r := <-when(libera(1),
+		canaliAmministratore[1][0]): {
+			soli++
+			r.ack <- 1
+		}
+		case r := <-when(disponibile() >= 0 &&
+		priorità(canaliAmministratore[0][1], canaliProprietario[0][1], canaliProprietario[2][1]),
+		canaliAmministratore[1][1]): {
+			var oggetto = disponibile()
+			uffici[oggetto] = r.soggetto
+			soli--
+			r.ack <- oggetto
+		}
+		case r := <-canaliAmministratore[1][2]: {
 			if posticipatiACK[r.oggetto] != nil {
 				uffici[r.oggetto] = -2
 				posticipatiACK[r.oggetto] <- 1
@@ -152,13 +177,12 @@ func filiale() {
 			r.ack <- 1
 		}
 		case r := <-when(libera(1) &&
-		priorità(canaliAmministratore[0]),
+		priorità(canaliAmministratore[0][0], canaliAmministratore[1][0]),
 		canaliProprietario[0][0]): {
 			soli++
 			r.ack <- 1
 		}
-		case r := <-when(disponibile() >= 0 &&
-		priorità(canaliAmministratore[1]),
+		case r := <-when(disponibile() >= 0,
 		canaliProprietario[0][1]): {
 			var oggetto = disponibile()
 			uffici[oggetto] = r.soggetto
@@ -173,18 +197,18 @@ func filiale() {
 			} else { uffici[r.oggetto] = -1 }
 			r.ack <- 1
 		}
-		case r := <-when(libera(2) &&
-		priorità(canaliAmministratore[0], canaliProprietario[0][0]),
+		case r := <-when(libera(1) &&
+		priorità(canaliAmministratore[0][0], canaliAmministratore[1][0]),
 		canaliProprietario[1][0]): {
-			soli += 2
+			soli++
 			r.ack <- 1
 		}
 		case r := <-when(disponibile() >= 0 &&
-		priorità(canaliAmministratore[1], canaliProprietario[0][1]),
+		priorità(canaliAmministratore[0][1], canaliProprietario[0][1], canaliProprietario[2][1]),
 		canaliProprietario[1][1]): {
 			var oggetto = disponibile()
 			uffici[oggetto] = r.soggetto
-			soli -= 2
+			soli--
 			r.ack <- oggetto
 		}
 		case r := <-canaliProprietario[1][2]: {
@@ -195,6 +219,50 @@ func filiale() {
 			} else { uffici[r.oggetto] = -1 }
 			r.ack <- 1
 		}
+		case r := <-when(libera(2) &&
+		priorità(canaliAmministratore[0][0], canaliAmministratore[1][0], canaliProprietario[0][0], canaliProprietario[1][0]),
+		canaliProprietario[2][0]): {
+			soli += 2
+			r.ack <- 1
+		}
+		case r := <-when(disponibile() >= 0,
+		canaliProprietario[2][1]): {
+			var oggetto = disponibile()
+			uffici[oggetto] = r.soggetto
+			soli -= 2
+			r.ack <- oggetto
+		}
+		case r := <-canaliProprietario[2][2]: {
+			if posticipatiACK[r.oggetto] != nil {
+				uffici[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { uffici[r.oggetto] = -1 }
+			r.ack <- 1
+		}
+		case r := <-when(libera(2) &&
+		priorità(canaliAmministratore[0][0], canaliAmministratore[1][0], canaliProprietario[0][0], canaliProprietario[1][0]),
+		canaliProprietario[3][0]): {
+			soli += 2
+			r.ack <- 1
+		}
+		case r := <-when(disponibile() >= 0 &&
+		priorità(canaliAmministratore[0][1], canaliProprietario[0][1], canaliProprietario[2][1]),
+		canaliProprietario[3][1]): {
+			var oggetto = disponibile()
+			uffici[oggetto] = r.soggetto
+			soli -= 2
+			r.ack <- oggetto
+		}
+		case r := <-canaliProprietario[3][2]: {
+			if posticipatiACK[r.oggetto] != nil {
+				uffici[r.oggetto] = -2
+				posticipatiACK[r.oggetto] <- 1
+				posticipatiACK[r.oggetto] = nil
+			} else { uffici[r.oggetto] = -1 }
+			r.ack <- 1
+		}
+		
 		case <-bloccaFiliale: {
 			fine = true
 		}
@@ -231,7 +299,7 @@ func consulente(id int) {
 	}
 }
 
-func amministratore(id int) {
+func amministratore(id int, tipo int) {
 	const nome = "AMMINISTRATORE"
 	fmt.Printf("[%s %03d] inizio\n", nome, id)
 	
@@ -242,7 +310,7 @@ func amministratore(id int) {
 	for i := 0; i < AZIONI_AMMINISTRATORE; i++ {
 		time.Sleep(time.Duration(rand.Intn(TEMPO_AMMINISTRATORE) + TEMPO_MINIMO) * time.Millisecond)
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azioni[i])
-		canaliAmministratore[i] <- r
+		canaliAmministratore[tipo][i] <- r
 		r.oggetto = <-r.ack
 		if r.oggetto < 0 {
 			finito <- true
@@ -287,8 +355,8 @@ func main() {
 	
 	go filiale()
 	for i := 0; i < NUM_CONSULENTI; i++ { go consulente(i) }
-	for i := 0; i < NUM_AMMINISTRATORE; i++ { go amministratore(i) }
-	for i := 0; i < NUM_PROPRIETARIO; i++ { go proprietario(i, i % 2) }
+	for i := 0; i < NUM_AMMINISTRATORE; i++ { go amministratore(i, i % 2) }
+	for i := 0; i < NUM_PROPRIETARIO; i++ { go proprietario(i, i % 4) }
 	
 	for i := 0; i < NUM_AMMINISTRATORE + NUM_PROPRIETARIO; i++ { <-finito }
 	bloccaFiliale <- true
