@@ -20,6 +20,7 @@ const (
 	NM       = 10
 	MAX_BUFF = 100
 	
+	//questa sarebbe giusto toglierla e usare ogni volta NUM_COMMESSI * 3
 	NUM_SUPERVISIONAMENTI = 30
 
 	NUM_COMMESSI = 10
@@ -68,6 +69,12 @@ func lunghezzeCanaliInMatrice(canali [][]chan richiesta) [][]int {
 	return lunghezze
 }
 
+func ackPosticipatiPresenti(channels []chan int) []int {
+    result := make([]int, len(channels))
+    for i, ch := range channels { if ch == nil {  result[i] = 0 } else { result[i] = 1 } }
+    return result
+}
+
 func when(b bool, c chan richiesta) chan richiesta {
 	if !b { return nil }
 	return c
@@ -95,7 +102,7 @@ func abbigliamento() {
 	)
 	
 	var (
-		supervisionamenti [NUM_SUPERVISIONAMENTI]int
+		supervisionamenti [NUM_COMMESSI * 3]int
 		posticipatiACK [NUM_COMMESSI]chan int
 	)
     for i := range supervisionamenti { supervisionamenti[i] = -3 }
@@ -116,11 +123,13 @@ func abbigliamento() {
 			lunghezzeCommesso  = lunghezzeCanaliInVettore(canaliCommesso[:])
 			lunghezzeCliente   = lunghezzeCanaliInMatrice(canaliClienteSlice)
 			lunghezzaFornitore = len(canaleFornitore)
+			
+			//è una buona idea togliere questa parte e chiamare le funzioni nel print sotto
 		)
 		
 		//print del vettore
 		fmt.Printf("[%s] totali: %03d, mascherine: %03d, fine: %5t\n%sVettoreSupervisionamenti: %v, VettorePosticipatiACK: %v\n%sCanaliCommesso: %v, CanaliCliente: %v, CanaliFornitore: %1d\n",
-		nome, totali, mascherine, fine, spazi, supervisionamenti, posticipatiACK, spazi, lunghezzeCommesso, lunghezzeCliente, lunghezzaFornitore)
+		nome, totali, mascherine, fine, spazi, supervisionamenti, ackPosticipatiPresenti(posticipatiACK[:]), spazi, lunghezzeCommesso, lunghezzeCliente, lunghezzaFornitore)
 		
 		select {
 		case r := <-when(!fine && libero(),
@@ -239,8 +248,8 @@ func commesso(id int) {
 			canaliCommesso[i] <- r
 			continua = <-r.ack
 			if continua < 0 {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
+				finito <- true
 				return
 			}
 			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
@@ -263,15 +272,15 @@ func cliente(id int, tipo int) {
 		canaliCliente[tipo][i] <- r
 		r.oggetto = <-r.ack
 		if r.oggetto < 0 {
-			finito <- true
 			fmt.Printf("[%s %03d] fine\n", nome, id)
+			finito <- true
 			return
 		}
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func fornitore(id int) {
@@ -288,15 +297,15 @@ func fornitore(id int) {
 		canaleFornitore <- ack
 		continua = <-ack
 		if !continua {
-			finito <- true
 			fmt.Printf("[%s %03d] fine\n", nome, id)
+			finito <- true
 			return
 		}
 		fmt.Printf("[%s %03d] è il mio turno di depositare le mascherine\n", nome, id)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {

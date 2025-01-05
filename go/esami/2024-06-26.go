@@ -191,8 +191,8 @@ func dipendente(id int) {
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func visitatore(id int, tipo int) {
@@ -211,8 +211,8 @@ func visitatore(id int, tipo int) {
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {

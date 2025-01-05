@@ -39,7 +39,7 @@ var (
 				  {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
 				  {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 					
-	finito              = make(chan bool)
+	finito              = make(chan bool, MAX_BUFF)
 	bloccaStabilimento  = make(chan bool)
 	terminaStabilimento = make(chan bool)
 )

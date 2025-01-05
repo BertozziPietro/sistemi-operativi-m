@@ -123,8 +123,10 @@ func autolavaggio() {
 			r.ack <- -1
 		}
 		case r := <-canaliAddetto[1]: {
-			tunnels[r.soggetto] = -2
+			//attenzione a modificare una variabile prima di leggerla
+			// o a mandare gli ack troppo presto
 			if tunnels[r.soggetto] >= 0 { posticipatiACK[r.soggetto] = r.ack } else { r.ack <- 1 }
+			tunnels[r.soggetto] = -2
 		}
 		case r := <-when(libero() && disponibile() >= 0 &&
 		priorità(canaliAddetto[1], canaliCliente[1][0]),
@@ -179,8 +181,8 @@ func addetto(id int) {
 			canaliAddetto[i] <- r
 			continua = <-r.ack
 			if continua < 0 {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
+				finito <- true
 				return
 			}
 			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
@@ -209,8 +211,8 @@ func cliente(id int, tipo int) {
 				canaliCliente[t][i] <- r
 				risorsa = <-r.ack
 				if risorsa < 0 {
-					finito <- true
 					fmt.Printf("[%s %03d] fine\n", nome, id)
+					finito <- true
 					return
 				}
 				fmt.Printf("[%s %03d] è il mio turno di %s numero %d\n", nome, id, azioni[t][i], risorsa)
@@ -218,8 +220,8 @@ func cliente(id int, tipo int) {
 		}
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {

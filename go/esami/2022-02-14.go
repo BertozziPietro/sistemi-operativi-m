@@ -138,8 +138,8 @@ func mostra() {
 			ack <- true
 		}
 		case <-terminaMostra: {
-			finito <- true
 			fmt.Printf("[%s] fine\n", nome)
+			finito <- true
 			return
 		}}
 	}
@@ -161,8 +161,8 @@ func utente(id int, tipo int) {
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {

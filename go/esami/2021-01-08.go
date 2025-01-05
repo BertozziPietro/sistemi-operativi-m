@@ -41,7 +41,7 @@ var (
 					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)},
 					    {make(chan chan bool, MAX_BUFF), make(chan chan bool, MAX_BUFF)}}
 					
-	finito           = make(chan bool)
+	finito           = make(chan bool, MAX_BUFF)
 	bloccaDeposito   = make(chan bool)
 	terminaDeposito  = make(chan bool)
 )
@@ -226,10 +226,10 @@ func consumatore(id int, tipo int) {
 		fmt.Printf("[%s %03d] mi metto in coda per %s\n", nome, id, azione)
 		canaliConsumatore[tipo][i] <- ack
 		continua = <-ack
-			if !continua {
-				fmt.Printf("[%s %03d] fine\n", nome, id)
-				return
-			}
+		if !continua {
+			fmt.Printf("[%s %03d] fine\n", nome, id)
+			return
+		}
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	

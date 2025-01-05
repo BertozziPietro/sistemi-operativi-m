@@ -132,8 +132,9 @@ func filiale() {
 			r.ack <- -1
 		}
 		case r := <-canaliConsulente[1]: {
-			uffici[r.soggetto] = -2
+			//anche qui attenzione a come scrivi quello che pensi
 			if uffici[r.soggetto] >= 0 { posticipatiACK[r.soggetto] = r.ack } else { r.ack <- 1 }
+			uffici[r.soggetto] = -2
 		}
 		case r := <-when(libera(1),
 		canaliAmministratore[0][0]): {
@@ -313,15 +314,15 @@ func amministratore(id int, tipo int) {
 		canaliAmministratore[tipo][i] <- r
 		r.oggetto = <-r.ack
 		if r.oggetto < 0 {
-			finito <- true
 			fmt.Printf("[%s %03d] fine\n", nome, id)
+			finito <- true
 			return
 		}
 		fmt.Printf("[%s %03d] è il mio turno di %s numero %d\n", nome, id, azioni[i], r.oggetto)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func proprietario(id int, tipo int) {
@@ -338,15 +339,15 @@ func proprietario(id int, tipo int) {
 		canaliProprietario[tipo][i] <- r
 		r.oggetto = <-r.ack
 		if r.oggetto < 0 {
-			finito <- true
 			fmt.Printf("[%s %03d] fine\n", nome, id)
+			finito <- true
 			return
 		}
 		fmt.Printf("[%s %03d] è il mio turno di %s numero %d\n", nome, id, azioni[i], r.oggetto)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {

@@ -200,8 +200,8 @@ func spazzaneve(id int) {
 			canaliSpazzaneve[i] <- r
 			continua = <-r.ack
 			if continua < 0 {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
+				finito <- true
 				return
 			}
 			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
@@ -245,8 +245,8 @@ func auto(id int) {
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {

@@ -156,8 +156,8 @@ func addetto(id int) {
 			canaliAddetto[i] <- ack
 			continua = <-ack
 			if !continua {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
+				finito <- true
 				return
 			}
 			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
@@ -181,15 +181,15 @@ func cittadino(id int, tipo int) {
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {
 	fmt.Println("[MAIN] inizio")
 	rand.Seed(time.Now().Unix())
 	
-	ruotaTipo := func(i int) int { if i%3 == 0 { return 1 } else { return 0 } }
+	ruotaTipo := func(i int) int { if i % 3 == 0 { return 1 } else { return 0 } }
 	
 	go casaAcqua()
 	go addetto(0)

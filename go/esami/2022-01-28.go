@@ -198,8 +198,8 @@ func fornitore(id int, tipo int) {
 			canaliFornitore[tipo][i] <- ack
 			continua = <-ack
 			if !continua {
-				finito <- true
 				fmt.Printf("[%s %03d] fine\n", nome, id)
+				finito <- true
 				return
 			}
 			fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
@@ -223,8 +223,8 @@ func addetto(id int, tipo int) {
 		fmt.Printf("[%s %03d] è il mio turno di %s\n", nome, id, azione)
 	}
 	
-	finito <- true
 	fmt.Printf("[%s %03d] fine\n", nome, id)
+	finito <- true
 }
 
 func main() {
