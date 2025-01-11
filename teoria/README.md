@@ -76,7 +76,43 @@
 
 ## Implementazioni Concorrenza
 
-## Algoritm Sincronizzazione Distribuiti
+## Algoritmi Sincronizzazione Distribuiti
+
+1. Quale è il legame tra modello a scambio di messaggi e sistema distribuito?
+   
+   Il modello a scambio di messaggi è la naturale astrazione di un sistema
+   distribuito, nel quale processi distinti eseguono su nodi fisicamente separati,
+   collegati tra di loro attraverso una rete. Nel sistema distribuito non ci sono risorse condivise e non c'è un glock globale. Si passa dla concorrente al distribuito e si introduce la possibilità di malfunzionamenti indipendenti.
+
+2. Quali sono le proprietà desiderabili nel distribuito?
+   
+   Salabilità e tolleranza ai guasti. La scalabilità garantisce che nell’applicazione distribuita le prestazioni aumentano al crescere del numero di nodi utilizzati. La tolleranza ai guasti garantisce che l’applicazione è in grado di funzionare anche in
+   presenza di guasti (es. crash di un nodo, problemi sulla rete, ecc.).
+
+3. Come si misurano le prestazioni di un sistema distribuito?
+   
+   Lo speedup e l'efficienza sono indicatori usati e idelmente hanno rispettivamente valore $n$ ed $1$.
+   
+   $$
+   Speedup(n)=\frac{Tempo(1)}{Tempo(n)} \newline
+Efficienza(n)=\frac{Speedup(n)}{n}
+   $$
+
+4.  Quali spossono essere i tipi di guasto e cosa si intende come si implementa la tolleranza ai guasti?
+   
+   I guasti possono essere transienti, intermittenti o persistenti. Si possono implementare tecniche di ridondanza e sono necessari meccanismi di rilevazione (fault detection) e di riprestino (recovery).
+
+5. Come è organizzata la gestione del tempo in un sistema distribuito?
+   
+   Ogni nodo è dotato di un suo orologio. Se gli orologi locali di due nodi non sono sincronizzati, è possibile che due eveti in due nodi diversi siano associati a due istanti temporali che fanno semprare che uno sia precedente all'altro quando in realtà è il contrario. Nel caos isa necessario un riferimento temporale unico e si può usare un orologio universale fisico (algoritmi di Berkley e Cristian) o un orologio logico; che permette di associare ad ogni eventi un istant e logico (timestamp) la cui relazione coi timestamp di altri eventi sia coerente con l'ordine in cui essi si verificano.
+
+6. Come si possono caratterizzare i eventi concorrenti?
+   
+   E' possibile definire la relazione di precedenza tra eventi (Heppende Before, $->$). Data una coppia di eventi $a$ e $b$, allora se $a$ precede $b$ si indica con $a->b$, se invece $a$ precede $a$, si indica con $b->a$, e infine se nessuna delle due è valida allora sono concorrenti.
+
+7. Come funziona l'algoritmo di Lamport?
+   
+   Ogni processo mantiene localmente un contatore del tempo logico e ogni nuovo evento all'interno del processo provoca un incremento del valore del contatore. Inoltre Ogni volta che il processo vuole inviare un messaggio, dopo aver incrementato il contatore, quest'ultimo viene allegato al messaggio. Quando si riceve un messaggio si assegna al proprio contatore il massimo tra il valore del contatore allegato e il valore attuale, e successivamene lo si incrementa. Usualmente implementato dal middleware che interfaccia i precessi alla rete.
 
 ## Introduzione HCP
 
