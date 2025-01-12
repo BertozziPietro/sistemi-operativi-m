@@ -98,7 +98,7 @@
 Efficienza(n)=\frac{Speedup(n)}{n}
    $$
 
-4.  Quali spossono essere i tipi di guasto e cosa si intende come si implementa la tolleranza ai guasti?
+4. Quali spossono essere i tipi di guasto e cosa si intende come si implementa la tolleranza ai guasti?
    
    I guasti possono essere transienti, intermittenti o persistenti. Si possono implementare tecniche di ridondanza e sono necessari meccanismi di rilevazione (fault detection) e di riprestino (recovery).
 
@@ -113,6 +113,30 @@ Efficienza(n)=\frac{Speedup(n)}{n}
 7. Come funziona l'algoritmo di Lamport?
    
    Ogni processo mantiene localmente un contatore del tempo logico e ogni nuovo evento all'interno del processo provoca un incremento del valore del contatore. Inoltre Ogni volta che il processo vuole inviare un messaggio, dopo aver incrementato il contatore, quest'ultimo viene allegato al messaggio. Quando si riceve un messaggio si assegna al proprio contatore il massimo tra il valore del contatore allegato e il valore attuale, e successivamene lo si incrementa. Usualmente implementato dal middleware che interfaccia i precessi alla rete.
+
+8. Come possiamo classificare le soluzoini volte a garantire che due o più processi non possano eseguire contemporaneamente alcune prestabilite attività?
+   
+   Per risolvere la mutua esclusione distribuita si può ricorrere a soluzoni token-based o permission-based e queste ultime a loro volta possono essere centralizzate oppure decentralizate.
+
+9. Quali sono vantaggi e svantaggi della soluzioni permission-based centralizzata?
+   
+   L'algoritmo è equo quindi non c'è starvation. E' anche semplice perchè prevede solo 3 messaggi: richiesta, autorizzazione e rilascio. Purtroppo non è né scalabile né tollerante ai guasti. Un procesos che non riceve autorizzazione non può sapere se non è stata concessa o se il gestore è guasto.
+
+10. Quale dell'algoritmo permission-based è scalabile e cosa possiamo dire sulla sua tolleranza ai guasti?
+    
+    L'algoritmo Ricard-Agrawala prevede $2*(N-1)$ messaggi per ogni sezione critica. Inoltre la tolleranza ai guasti è pessima perchè è sufficiente che ci sia un guasto su un nodo e nessuno sarà più autorizzato a fare nulla. Si può fare una piccola modifica introducento i messaggi di accesso negato. Una volta ricevuti ci si mette di nuovo in attesa ma si può impostare un timeout per rilevare i guasti e eventualmente escluderlo dal gruppo.
+
+11. Quaii osno gli aspetti cruciali dell'algoritmo token ring?
+    
+    L'intero sistema è costruito da un insieme di processi in competizione collegati tra loro in una topologia ad anello e i processi conoscono i loro vicini. Un messaggio, detto token, circola attraverso l'anello, nel verso relativo all'ordine dei processi nella topologia. Chi deve eseguire la sezione critica tiene il token fino al rilascio. E' scalabile ma ci possono essere moltissimi messaggi per ogni sezione critica. Inoltre ci sono N punti di fallimento e un crash può fare perdere il token.
+
+12. Cosa è un algoritmo di elezione?
+    
+    In alcuni algoritmi è necessario che un processo svolga il ruolo di coordinatore. La disegazione può essere statica o dinamica. Nel secondo caso, per scegliere, si usa un algoritmo di elezione.
+
+13. Quali sono le differenze tra gli algoritmi di elezione Bully ed ad Anello?
+    
+    Nel primo il processo che avvia l'elezione invia l'aposito messaggio a tutti i processi con l'id più alto del suo e chi non è guasto risponde positivamente. Poi se c'è stata almeno una risposta, tutti quelli che hanno risposto avviano un elezione a loro volta. Nel secondo caso quando un processo si rende conto che il coordinatore è guasto inizia un elezione mandando un messaggio col priprio id e chi lo riceve aggiunge il proprio id e lo riinvia a sua volta. Quando si riceve un messaggio con proprio id si cambia il contenuto del messaggio e si invia ora l'identità del nuovo coordinatore, ovvero l'id più alto tra tutti.
 
 ## Introduzione HCP
 
