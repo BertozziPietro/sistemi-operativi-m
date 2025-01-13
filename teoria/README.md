@@ -140,6 +140,40 @@ Efficienza(n)=\frac{Speedup(n)}{n}
 
 ## Introduzione HCP
 
+1. Quali sono le differenze tra il calcolo concorrente e il calcolo parallelo?
+   
+   In entrambi i casi si da luogo ad un insieme di attività. Sono concorrenti se sono contemporaneamente in progress, ovvero iniziate ma non temrinate, sono parallele se effettivamente le attività multiple eseguono in contemporanea.
+   
+   Nel primo caso il numero di processori è maggiore del numero delle CPU, nel secondo invece no. 
+
+2. Perchè si esegue in parallelo?
+   
+   Per aumentare le performance in temini di complessità dei problemi che si possono risolvere e di tempo necessario.
+
+3. Cosa ci dice la Legge di Moore sull'evoluzione dei sistemi di calcolo nel tempo?
+   
+   Fino ai primi anni 2000 l'evoluzione dei sistemi di calcolo seguivano un andamento preciso: in numero di transistori in ogni 18 mesi. Quando poi si sono raggiunti i limiti fisici legati all' effeto Joule e non è stato più possibile aumentare la frequenza di clock è stato necessario aumentare la capacità di calcolo a parità di frequenza. Il parallelismo in questo senso è diventato una forma di accellerazione dell'hardware.
+
+4. Cosa si intende con Von Neumann Bottleneck?
+   
+   La velocità di fetching di istruzioni e dati diepden dalla velocità di trasmissione del Bus è una limitazione della velcità di esecuzione. Il modello di Von Neumann è stato quindi esteso con l'introduzione di memorie cache e di paralllelismo di basso livello, come Instruction-level parallelism (ILP) e HW multithreading (TLP). Il modello Von Neumann esteso è trasparente per lo sviluppatore.
+
+5. La cache che tipo di memoria è?
+   
+   E' una memoria associativa ad accesso veloce e di capacità limitata che risiede sul chip del processore e si colooca ad un livello intermedio tra i registri e la memoria centrale. Viene gestita con criteri sul principio di località spaziale e temporale (cache hit/miss ed hit-rate).
+
+6. Cosa si intende con parallelismo a livello di istruzione?
+   
+   L'esecuzione di ogni istruzione viene attuata attraverso una sequenza di fasi. Ogni fase può essere affidata ad un unità funzionale indipendente che opera in parallelo alle altre. Si possono mettere in pipelining collegando tutte le unità funzionali tra loro eseguendo fasi diverse di istruzioni diverse in parallelo. In alternativa ci possono essere più istanze di ogni unità funzionale.
+
+7. Cosa si intende con hardware multi-threading?
+   
+   Permette a due thread di condividere la stessa CPU (core), utilizzando una tecnica di sovrapposizione. Ciò è reso possibile dalla duplicazione dei registri che mantengono lo stato di ogni thread (PC, IR, ecc) e da un meccanismo HW che implementa il context switch tra un thread ed un altro in modo molto efficiente. Sono possibili 2 approcci: a grana fine e a grana grossa. Nel primo caso viene eseguito context switch dopo ogni istruzione e nel secondo viene eseguito context switch quando il thread corrente è in una situaizone di attesa.
+
+8. Come si realizza la parallelizzazione esplicita?
+   
+   SI possono usare 2 modelli: scambio di messaggi (MPI) o memoria condivisa (OpenMP). Il parallelismo si ottiene distribuendo task diversi a processi diversi; ogni processo è assegnato a una CPU a sua completa disposizione. Normalmente su utilizza il paradigma SPMD (single program multiple data) sfruttando il branching condizionale. Solo pochi programmi sono embarassingly parallel, nella maggior parte dei casi le iterazioni non sono indipendenti tra loro ed è necessaria che i processi siano sincronizzati. Quindi prima s i divide il lavoro e ppoi ci si occupa di sincronizzazione e comunicazione.
+
 ## Programmazione HPC
 
 ## Programmazione Parallela
