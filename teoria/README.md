@@ -174,6 +174,41 @@ Efficienza(n)=\frac{Speedup(n)}{n}
    
    SI possono usare 2 modelli: scambio di messaggi (MPI) o memoria condivisa (OpenMP). Il parallelismo si ottiene distribuendo task diversi a processi diversi; ogni processo è assegnato a una CPU a sua completa disposizione. Normalmente su utilizza il paradigma SPMD (single program multiple data) sfruttando il branching condizionale. Solo pochi programmi sono embarassingly parallel, nella maggior parte dei casi le iterazioni non sono indipendenti tra loro ed è necessaria che i processi siano sincronizzati. Quindi prima s i divide il lavoro e ppoi ci si occupa di sincronizzazione e comunicazione.
 
+9. Cosa sono i petaFLOPS e gli exaFLOPS?
+   
+   Sono unità di misura delle prestazioni ovvero i floating point operations per second. Corrispondono rispettivamente a $10^{15}$ e a $10^{18}$ FLOPS.
+
+10. Quale è il legame tra speedup ed efficienza?
+    
+    Lo speedup misura quanto è più veloce la versione parallela rispetto alla versione sequenziale, ovvero il guadagno della parallelizzazione e nel caso ideale vale 1. Nei casi non ideali c'è overhead dovuto alla creazione e allocazione dei processi, alla cominicazione e alla sincronizzazione e anche alla distribuzione non bilanciata del lavoro. L'efficienza serve a misurare la scalabilità: quanto più rimane costate tanto più un programma è scalabile.
+
+11. Quando si misura la scalabilità quali opzioni si hanno?
+    
+    Si può misurare la scalabilità strong, ovvero quanto si può guadagnare nella soluzione di uno stesso problema di dimensione fissata aumentando il numero di processori, oppure la scalabilità weak, ovvero se è possibile risolvere lo stesso problema di dimensioni maggiori nello stesso tempo.
+
+12. Cosa dice la Legge di Amdahl e cosa ci dice sulla saclabilità strong?
+    
+    Partendo dalla premessa che non tutto un programma è parallelizzabile, si calcola lo speedup in funzione di $r$ ovvero della frazione del tempo totale di esecuzione spesa nella parte non parallelizzabile e si ottinene $\lim_{p \to \infty} S = \frac{1}{r}$ ; ovvero se $r$ e diverso da 0, lo speedup non può crescere all'infinito. Similmente vale $\lim_{p \to \infty} E = 0$ il che ci conferma che solo nel caso ideale al crescere di p, l'efficienza si mantiene costante.
+
+13. Come si valuta la scalabilità weak?
+    
+    Si usano efficienza scalata e speedup scalato:
+    
+    $$
+    E_s(p, N) = \frac{T(N, 1)}{T(pN, p)} \newline
+S_s(p, N) = E_sp
+    $$
+
+14. Cosa implica la Legge di Gustafson?
+    
+    La Legge di Gustafson presuppone che il probelma sia di dimensione variabile e si concentra sulla scalabilità weak. implica che assegnando ad ogni processore un workload costante (1-r), lo speedup cresce linearmente con il numero dei processori.
+    
+    $$
+    S(p, pN) = \frac{T(1, pN)}{T(p, pN)} \newline
+da \space cui \newline
+S(p, pN) = r + (1 - r)p
+    $$
+
 ## Programmazione HPC
 
 ## Programmazione Parallela
