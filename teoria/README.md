@@ -209,6 +209,87 @@ da \space cui \newline
 S(p, pN) = r + (1 - r)p
     $$
 
-## Programmazione HPC
+## Programmazione Parallela con MPI
 
-## Programmazione Parallela
+1. In quale ambito lo standard è rappreesentato dalle librerie MPI?
+   
+   Se i nodi dell'architettura non condividono memoria e lo sviluppo dei programmi paralleli si fonda sul modello a scambio di  messaggi (esempio Cluster HPC).
+
+2. Quali sono le caratteristiche principali dello standard Message Passing Interface?
+   
+   E' basato sul paradigma SPMD con molteplici istanze dello stesso programma, ogniuna in esecuzione contemporanea su un nodo distinto. Ogni istanza rappresenta un processo MPI. Offre un ricco set di funzioni per esprimere comunicazione tra processi sia punto-punto che collective, con semantiche sia sincrone che asincrone. Offre inoltre potenti strumenti per data partitioning e data collecting e gestisce i processi in maniera statica e implicita definendo il grado di parallelismo a tempo di caricamento.
+
+3. Cosa sono i comunicator?
+   
+   Sono astrazioni che definiscono un dominio di comunicazione, ovvero un insieme di processi che possono comunicare tra loro; due processi possono scambiarsi messaggi solo se appartengono allo stesso comunicator. Esiste un comunicator di default detto MPI_COMM_WORLD. A partire da questo è possibile crearne di altri.
+
+4. Quali sono i limiti della soluzioni centralizzate e cosa si può fare per superarli?
+   
+   Al crescere del numero dei nodi il master potrebbe rappresentare un collo di bottiglia, dovendo ricevere molti messaggi. Per mitigari, si può distribuire il carico di comunicazione tra più nodi utilizzando degli schemi di comunicaizone gerarchici che coinvolgono tutti i nodi. Ogni nodo dell’albero riceve messaggi dai nodi figli e manda un messaggio «cumulativo» al padre. In questo modo il master viene alleggerito.
+
+5. Quali sono le intestazioni delle funzioni principali di MPI?
+
+```c
+int MPI_Init(int* argc, char*** argv);
+
+int MPI_Finalize(void);
+
+int MPI_Comm_create(MPI_Comm comm, MPI_Group group, MPI_Comm* new_comm);
+
+int MPI_Comm_spawn(const char* command, char* argv[],
+int maxprocs, MPI_Info info, int root, MPI_Comm comm,
+MPI_Comm* intercomm, int array_of_errcodes[]);
+
+int MPI_Comm_size(MPI_Comm comm, int* size);
+
+int MPI_Comm_rank(MPI_Comm comm, int* rank);
+
+int MPI_Send(const void* buffer, int count, MPI_Datatype datatype,
+int dest, int tag, MPI_Comm comm);
+
+int MPI_Ssend(const void* buffer, int count, MPI_Datatype datatype,
+int dest, int tag, MPI_Comm comm);
+
+int MPI_Isend(const void* buffer, int count, MPI_Datatype datatype,
+int dest, int tag, MPI_Comm comm, MPI_Request* request);
+
+int MPI_Bsend(const void* buffer, int count, MPI_Datatype datatype,
+int dest, int tag, MPI_Comm comm);
+
+int MPI_Wait(MPI_Request* request, MPI_Status* status);
+
+int MPI_Test(MPI_Request* request, int* flag, MPI_Status* status);
+
+int MPI_Recv(void* buffer, int count, MPI_Datatype datatype, int source,
+int tag, MPI_Comm comm, MPI_Status* status);
+
+int MPI_Irecv(void* buffer, int count, MPI_Datatype datatype, int source,
+int tag, MPI_Comm comm, MPI_Request* request);
+
+int MPI_Reduce(const void* send_buffer, void* receive_buffer, int count,
+MPI_Datatype datatype, MPI_Op operation, int root, MPI_Comm comm);
+
+int MPI_Ireduce(const void* send_buffer, void* receive_buffer,
+int count, MPI_Datatype datatype, MPI_Op operation, int root,
+MPI_Comm comm, MPI_Request* request);
+
+int MPI_Allreduce(const void* sendbuf, void* recvbuf, int count,
+MPI_Datatype datatype, MPI_Op operation, MPI_Comm comm);
+
+int MPI_Bcast(void* buffer, int count, MPI_Datatype datatype,
+int emitter_rank, MPI_Comm communicator);
+
+int MPI_Scatter(const void* sendbuf, int count_send,
+MPI_Datatype datatype_send, void* recvbuf, int count_recv,
+MPI_Datatype datatype_recv, int root, MPI_Comm comm);
+
+int MPI_Gather(void* sendbuf, int count_send,
+MPI_Datatype datatype_send, void* recvbuf, int count_recv,
+MPI_Datatype datatype_recv, int root, MPI_Comm communicator);
+
+int MPI_Barrier(MPI_Comm comm);
+
+double MPI_Wtime(void);
+```
+
+## Programmazione Parallela con OpenMP
