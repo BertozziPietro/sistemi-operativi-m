@@ -293,3 +293,76 @@ double MPI_Wtime(void);
 ```
 
 ## Programmazione Parallela con OpenMP
+
+1. Quali modelli si possono utilizzare in caso di memoria condivisa ra i processi?
+   
+   Si possono usare si il modello a scambio di messaggi, ad esempio con MPI, che il modello a memoria condivisa. In questo ultimo caso si possono usare diverse tecnologie: i sistemi multicore o multiprocessor come OpenMP o pthreads oppure le GP-GPU per le quali esistono librerie specifiche che consentono lo sviluppo di programmi destinati ad eseguire su GPU come CUPA (libreria proprietaria NVidia) oppure openCL.
+
+2. Quali sonole caratteristiche principali di OpenMP?
+   
+   E' una libreria che permette di parallelizzare il codice di programmi C, utilizzando un approccio dichiarativo. Offre strumenti per gestire i thread paralleli, ottenere/impostare informazioni sull'ambiente di esecuzione, definire la visibilità delle variabli rispetto ai thread paralleli e di sincronizzare i thread tra loro con sezioni critiche o bariere di sincronizzazione.
+
+3. Quali sono le clausole principali della direttiva parallel?
+   
+   Sono diverse. Con num_threads(N) si imposta il numero di thread paralleli. Usando shared private e firstprivate (ogni processo utilizza una copia privata inizializzata al valore che aveva prima di pragma) si può specificare il campo di visibilità (mentre di default la variabili sono private solo se definite internamente al blocco parallel, private altrimenti). Con reduction è possibile utilizzare una variabile di appoggio permettendo di valutare l'espessione in parallelo (aggiornamento di var in mutua esclusione). Con if si rende condizionale la parallelizzazione, se false allora l'esecuzione è sequenziale. Con for è possibile parallelizzare un ciclo e usando schedule ci si può assicurare di bilanciare il carico che può essere static o dynamic.
+
+4. Come si possono gestire le informazioni sui thread in esecuzione?
+   
+   ```c
+   #include <omp.h>
+   
+   #pragma omp parallel
+   {
+       // Restituisce il numero di thread paralleli
+       // da utilizzare all'interno di un blocco parallelo
+       int num_threads = omp_get_num_threads();
+   
+       // Restituisce il rank del thread che lo invoca (0 è il master)
+       int thread_id = omp_get_thread_num();
+   
+       // Imposta a n il numero di thread paralleli
+       // nei successivi blocchi paralleli
+       omp_set_num_threads(4);
+   }
+   
+   ```
+
+5. A cosa servono le direttive master e single?
+   
+   La direttiva master indica che solo il thread master (tipicamente il thread che ha un ID pari a 0)mentre la direttiva single crea una barierea di sincronizzazione implicita, garantendo che solo un thread, scelto arbitrariamente, esegua il blocco di codice.
+
+6. Quali clausole hanno come scopo principale la sincronizzazione?
+   
+   La prima è la direttiva critical: il blocco di istruzioni immediatamente successivo alla direttiva viene eseguito un solo processo alla volta. Anche la direttiva barrier è utile ed implmenta la classica barriera di sincronizzazione in un team di threads. Inoltre è possibile usare i lock per reealizzare schemi di sincronizzaizone ad hoc.
+   
+   ```c
+   //esattamente equivalente a critical
+   #include <stdio.h> #include <omp.h>
+   omp_lock_t my_lock;
+   int main() {
+       omp_init_lock(&my_lock);
+       #pragma omp parallel num_threads(4)
+       {
+           int i, j, t = omp_get_thread_num( );
+           for (i = 0; i < 5; ++i) {
+               omp_set_lock(&my_lock); //prologo sezione critica
+               printf("Thread %d – inizio sezione critica %d\n", t,i);
+               printf("Thread %d - fine sezione critica %d\n", t, i);
+               omp_unset_lock(&my_lock); //epilogo sezione critica
+           }
+       }
+       omp_destroy_lock(&my_lock);
+   }
+   ```
+
+7. Come si può misurare il tempo?
+   
+   ```c
+   double omp_get_wtime(void);```
+   ```
+
+8. Quali osservazioni possiamo fare paragonando OpenMP ad altre librerie come pthread oppure MPI?
+   
+   Pthread utilizza un paradigma MPMD ed un modello di creazione fork-join. Mette a disposizione un ampio set di politiche per la sinconizzazione specifiche (mutex, semafori, condition) e risulta particolarmente adatto per algoritmi task-parallel. OpenMp a confronto utilizza un approccio di più alto livello, basato su SPMD ed un modello di crreazione cobegin-coend. La sincronizzazione avviene tramite direttive e clausole che implemntano schemi predefiniti (barrier, critical, reduction), o anche ad hoc coi lock. Ideale per la modellazione di algoritmi data-parallel.
+   
+   Se mettiamo a confronto OpenMP con MPI è evidente che il primo è ben più semplice da utilizzare (vedi bilalnciamento del carico) e che il secondo, insieme alla complessità di utilizzo, ha tra le sue proprietà una maggiore scalabilità e portabilità.Da notare che è possibile combinare i due e beneficiare dei vantaggi di entrambi: si parla di Hybridization.
