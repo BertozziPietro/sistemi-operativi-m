@@ -66,6 +66,54 @@
 
 ## Programmzione Concorrente
 
+1. Cosa si intende con programmazione concorrente?
+   
+   La programmazione concorrente è l'insieme di delle tecniche, metodologie e strumenti per il supporto all'esecuzione di sistemi software composti da insiemi di attività svolte simultaneamente.
+
+2. Come funziona la classificazione di Flynn?
+   
+   In un sistema ci può essere parallelismo a livello di istruzioni o parallelismo a livello di dati. I sistemi vengono divisi in SISD(single instruction single data) come ad esmpio i traduzionali computer di Von Neumann, MISD(multiple instruction single data) come i computer in pipeline, SIMD(single instruction multiple data) come array sistolici o processori vettoriali e MIMD(multiple instruction multiple data) come i multicomputers (MPP, COW) e i multiprocessors (UMA, NUMA).
+
+3. Quali sono i diversi tipi di architettura?
+   
+   Single processor (o monoprocessore), shered-memory multiprocessor (o multiprocessore) e distributed memory system (o sistemi a memoria distribuita). Da notare che i nodi di un sistema a memoria distribuita possono essere monoprocessori o multiprocessori.
+
+4. Quale è la differenza tra UMA e NUMA?
+   
+   Nei sistemi UMA (UniformMemory Access) il tempo di accesso è uniforme da ogni processore ad ogni locazione di memoria (detti anche SMP), la rete di iinterconnessione è realizzata da un memory bus o da crossbar switch enormalmente il numeor di processori è ridotto (20-30). Nei sistemi NUMA (Non Uniform Acess Memory) il tempo di accesso dipende dalla distanza tra processore e memoria. La rete di interconnessione è un insieme di switch e memorie strutturato ad albero e ogni processore ha memorie più vicine e più lontane. La memoria è quindi organizzata gerarchicamente  per evitare la congestione del bus e normalment il numero dei processori è elevato (anche centinaia). 
+
+5. Quali sono i principali tipi di sistemi a memoria distribuita?
+   
+   Sono i multicomputer e i network system. I primi sono tightly coupled in cui i processori e la rete sono fisicamente vicini e i secondi sono loosley coupled in cui i nodi sono collegati ad una rete locale o geografica (Ethernet/Internet).
+
+6. A grandi linee come possiamo classificare le applicazioni concorrenti?
+   
+   In multithreaded, multitasking(sistemi distribuiti) e parallele. I primi sono il classico caso di concorrenza in cui i processi vengono schedulati e eseguiti indipendentemente e sono più dei processori. Nei sistemi distribuiti le componenti (task) vengono eseguite su nodi collegati tramite opportuni mezzi di interconnessione detti canali e possono essere organizzati in diversi modi (client-server, perr to peer, puplisher-substriber). Le applicaizoni parallele risolvono problemi complessi sfrutttando il parallelismo HW eseguendo su appositi modellli paralleli.
+
+7. Quali sono le definizioni di algoritmo, programma, processo, elaboratore ed evento?
+   
+   L'algoritmo è un procedimento logico che deve essere eseguito per risolvere un determinato problema. Il programma è la descrizione dell'algoritmo mediante un opportuno formalismo (linguaggio di programmazione), che rende possibile l'esecuzione dell'algoritmo da parte di un particolare elaboratore. Il processo è l'insieme ordinato di eventi cui da luogo un elaboratore quando opera sotto il controllo di un programma. Un elaboratore è un entità astratta realizzata in HW e in SW, in grado di eseguire programmi (descritti in un dato linguaggio). L'evento è l'esecuzione di un'operazione tra quelle appartenenti all'insieme che l'elaboratore sa riconoscere ed eseguire; ogni evento determina una transizione di stato dell'elaboratore. In conclusione Più processi possono essere associati allo stesso programma e ciascuno rappresenta l'esecuzione dello stesso codice con dati in ingresso diversi.
+
+8. Quali sono le possibili interazioni tra processi?
+   
+   Ammesso che i processi siano tra loro interagenti e non indipendenti; possono essere in cooperazione, interazione prevista e desiderata, competizione, interazione prevedibile ma non desiderata e non grave, o interferenza, non prevista, non desiderata e quasi certamente non inevitabile.
+
+9. Quali soluzioni forniscono i modelli linguistici per la concorrenza?
+   
+   SOno il fork/join e il cobegin/coend. Con fork si può creare e attivare un processo che esegue in parallelo col chiamante, mentre join consente di determinare quando un processo creato tramite la fork ha terminato il suo compito, sincronizzandosi con tale evento: c'è quindi la possibilità di denotare in modo esplicito il processo sulla cui terminazione ci si vuole sincronizzare. In ogni blocco cobegin/coend invece ogni istruzione viene eseguita in parallelo e in ogni istruzione si può inserire un ulteriore blocco. Da mìnotare che non tutti i grafici di precedenza non possono essere espressi tramite cobegin/coend.
+
+10. Quali sono le proprietà che caratterizzano i processi sequenziali e quali sono le proprietà che caratterizzano i processi concorrenti?
+    
+    I nodi del grafo di precedenza rappresentano i singoli eventi del processo mentre gli archi orientati identificano le precedenza temporali tra tali eventi. Nei processi sequenziali il grafo di processi è ad ordinamento totale mentre nei programmmi concorrenti il grafo di precedenza è ad ordinamento parziale.
+
+11. Quali sono le proprietà che caratterizzano i programmi sequenziali e quali sono le proprietà che caratterizzano i programmi concorrenti?
+    
+    La traccia dell'esecuzione (o storia) è la sequenza degli stati attraversati dal sistema di elaborazione durante l'esecuzione del programma (variabili esplicite ed implicite). Nei programmi sequenziali la traccia è costante ad ogni esecuzione, mentre nei programmi concorrenti la traccia può variare ad ogni esecuzione (non determinismo).
+
+12. Quali esempio possono aiutare a capire cosa si intende con safety e liveness?
+    
+    Sono due proprietà dei programmi. La safety garantisce che durante l'esecuzione non si entrerà mai in uno stato errato (stato in cui le variabili assumono valori indesiderati), mentre la liveness garantisce che durante l'esecuzione, prima o poi si entrerà in uno stato corretto (stato in cui le variabili assumono valori desiderati). Alcuni esempi di safety sono la correttezza dello stato finale, la mutua esclusione dell'accesso a risorse condivise e l'assenza di deadlock. Alcuni esempi di liveness sono la terminazione e l'assenza di starvation.
+
 ## Modello a Memoria Comune
 
 ## Nucleo Sistema Memoria Comune
