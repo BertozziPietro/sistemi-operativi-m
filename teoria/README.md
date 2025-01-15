@@ -76,6 +76,32 @@
 
 ## Implementazioni Concorrenza
 
+1. Cosa è una goroutine?
+   
+   E' l'unità di esecuzione concorrente: una funziona che esegue concorrentemente ad altre nello stesso spazio di indirizzamento. Un programma go è costituito da una o più goroutine concorrenti. In generale ci sono più goroutine per thread di SO e le lingole goroutine possono essere estremamente leggere. La costante di ambiente GOMAXPROCS determina il numero di thread.
+   
+   $$
+   GOMAXPROCS = \frac{goroutine}{thread}
+   $$
+
+2. Quyali filosofia di fondo di go determina le scelte nell'implementazione delle comunicazioni tra goroutine?
+   
+   "Do not communicate by sharing memory. Instead, share memory by
+   communicating". I canali sono oggetti di prima classe e possono essere sia simmetrici che asimmetrici, 1-1, 1-m, m-m, la comunnicazione può essere sincrona o asincrona e sia bidirezionale che monodirezionale.
+
+3. Quali sono le particolarità del costrutto select in go?
+   
+   E' una istruzione analogoa al comando con guardia alternativo e la selezione è non deterministica tra i rami di guardia valida. Le guardie sono tutte semolici e il linguaggio non prevede la guardia logica: le guardi possono essere solo valide o ritardate. A questo si può in qualche modo ovviare utilizzando when:
+   
+   ```go
+   func when(b bool, c chan int) chan int {
+       if !b return nil
+       return c
+   }
+   ```
+
+4. 
+
 ## Algoritmi Sincronizzazione Distribuiti
 
 1. Quale è il legame tra modello a scambio di messaggi e sistema distribuito?
@@ -324,7 +350,6 @@ double MPI_Wtime(void);
        // nei successivi blocchi paralleli
        omp_set_num_threads(4);
    }
-   
    ```
 
 5. A cosa servono le direttive master e single?
@@ -358,11 +383,11 @@ double MPI_Wtime(void);
 7. Come si può misurare il tempo?
    
    ```c
-   double omp_get_wtime(void);```
+   double omp_get_wtime(void);
    ```
 
 8. Quali osservazioni possiamo fare paragonando OpenMP ad altre librerie come pthread oppure MPI?
    
    Pthread utilizza un paradigma MPMD ed un modello di creazione fork-join. Mette a disposizione un ampio set di politiche per la sinconizzazione specifiche (mutex, semafori, condition) e risulta particolarmente adatto per algoritmi task-parallel. OpenMp a confronto utilizza un approccio di più alto livello, basato su SPMD ed un modello di crreazione cobegin-coend. La sincronizzazione avviene tramite direttive e clausole che implemntano schemi predefiniti (barrier, critical, reduction), o anche ad hoc coi lock. Ideale per la modellazione di algoritmi data-parallel.
    
-   Se mettiamo a confronto OpenMP con MPI è evidente che il primo è ben più semplice da utilizzare (vedi bilalnciamento del carico) e che il secondo, insieme alla complessità di utilizzo, ha tra le sue proprietà una maggiore scalabilità e portabilità.Da notare che è possibile combinare i due e beneficiare dei vantaggi di entrambi: si parla di Hybridization.
+   Se mettiamo a confronto OpenMP con MPI è evidente che il primo è ben più semplice da utilizzare (vedi bilalnciamento del carico) e che il secondo, insieme alla complessità di utilizzo, ha tra le sue proprietà una maggiore scalabilità e portabilità. Da notare che è possibile combinare i due e beneficiare dei vantaggi di entrambi: si parla di Hybridization.
