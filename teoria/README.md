@@ -100,7 +100,13 @@
    }
    ```
 
-4. 
+4. Cosa si intende per unità di concorrenza in ada?
+   
+   L'unità di concorrenza in ada è il task e il lingiaggio adotta come metodo di interazione tra i processi il randevous esteso con comunicazione asimmetrica. Se un processo prende il nome di task allora i programmi concorrenti prendono il nome di procedure. Il messanismo di comunicazione prevede che ogni task possa definire delle entry visibili agli altri task e che questi ultimi possono chiamare dall'esterno. Un task che chiama una entry di un altro si mette in attesa del termine. Da notare che ad una stessa entry possono esserre associate più accept e ad esse possono corrispondere azioni diverse a seconda dalla fase di esecuzione del task. Un Task (server) può esporre più operazioni e accettare le richieste attraverso il comando con guardia alternativo select.
+
+5. Quali sono gli obbiettivi della progettazione di ada e come questi influenzano le sue caratteristiche?
+   
+   E' progettato per ridurre i costi di sviluppo e manutenzione, prevenire i bugs rilevandoli il prima possibile (tempo di compilazione), favorire riutilizzo e sviluppo in team e semplificare la manutenzione in termini di leggibilità e autodocumentazione. Ada è  quindi un linguaggio fortemente e statcamente tipato (due  tipi diversi non possono essere confrontati). La keyword access rende i puntatori più semplici da usare e ci sono attributi che arricchiscono i tipi in relazione al loro dominio. Complessivamente ada soddisfa i più alti standard di sicurezza del software.
 
 ## Algoritmi Sincronizzazione Distribuiti
 
