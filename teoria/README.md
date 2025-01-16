@@ -374,7 +374,7 @@ double MPI_Wtime(void);
 
 ## Programmazione Parallela con OpenMP
 
-1. Quali modelli si possono utilizzare in caso di memoria condivisa ra i processi?
+1. Quali modelli si possono utilizzare in caso di memoria condivisa tra i processi?
    
    Si possono usare si il modello a scambio di messaggi, ad esempio con MPI, che il modello a memoria condivisa. In questo ultimo caso si possono usare diverse tecnologie: i sistemi multicore o multiprocessor come OpenMP o pthreads oppure le GP-GPU per le quali esistono librerie specifiche che consentono lo sviluppo di programmi destinati ad eseguire su GPU come CUPA (libreria proprietaria NVidia) oppure openCL.
 
