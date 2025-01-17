@@ -2,6 +2,78 @@
 
 ## Virtualizzazione
 
+1. Cosa significa virtualizzare un sistema e cosa si intende con livello di indirettezza e quali sono i vantaggi?
+   
+   Dato un sistema costituito da un insieme di risorse HW e SW, virtualizzare il sistema significa presentare all'utilizzatore una visione delle risorse del sistema diversa da quella reale. Ciò si ottiene introducendo un livello di indirettezza tra la vista logica e quella fisica delle risorse con l'obbiettivo di disaccoppiare il comportamento delle risorse di un sistema di elaborazione offerte all'utente dalla loro realizzazione fisica. La virtualizzazione permette di utilizzare più SO sulla stessa macchina fisica, di isolare gli ambienti di esecuzione, di consolidare le risorse HW in un unica macchina fisica abbattendo i costi HW e di amministrazone, oltre a facilitare la gestione delle VM.
+
+2. Quali sono i principali esempi di virtualizzazione?
+   
+   La virtualizzazione a livello di processo: i sistemi multitasking permettono la contemporanea esecuzione di più processi, ogniuno dei quali dispone di una macchina virtuale dedicata, virtualizzazione realizzata dal kernel del SO.
+   
+   La virtualizzaizone della memoria: in presenza di memoria virtuale, ogni processo vede uno spazio di indirizzamento di dimensioni indipendenti dallo spazio fisico effettivamente a disposizione. La virtualizzazione è realizzata dal kernel del SO.
+   
+   Astrazione: in generale un oggetto astratto (risorsa virtuale) è la rappresentazione semplificata di un oggetto (risorsa fisica) che esibisce le proprietà significative per l'utilizzatore e nasconde i dettagli implementativi non necessari.Il disaccoppiamento è realizzato delle operazioni (interfaccia) con le quali è possibile utilizzare l'oggetto.
+   
+   Linguaggi di Programmazione: La capacità di portare lo stesso programma (scritto in un lingaggio di alto livello) su architetture diverse è possibile grazie alla definizione di una macchina virtuale i grado di interpretare ed eseguire ogni istruzione del linguaggio, indipendentemente dall'architettura del sistema (SO e HW): dette interpreti e compilatori.
+
+3. Cosa si intende con emulazione?
+   
+   L'emulazione è l'esecuzione di programmi compilati per una particolare architettura (e quindi un particolare insieme di istruzioni) su un sistema dotato di un diverso insieme di istruzioni. Questo permette a sistemi operativi o applicazioni, pensati per determinate architetture, di girare, non modificati, su architetture completamente differenti. Il vantaggio è l'interoperabilità tra ambienti eterogenei e lo svantaggio sono le ripercussioni sulle performances (efficienza).
+
+4. Come si può realizzare l'emulazione?
+   
+   Sono possibili due alternative: l'interpretazione e la compilazione dinamica. Il modo più diretto di emulare è interpretare: si legge ogni singola istruzione del codice macchina che deve essere eseguito e sulla esecuzione di più istruzioni sull'host virtualizzante per ottenere semanticamente lo stesso risultato. Produce un sovraccarico elevato perchè possono essere necessarie molte istruzioni sull'host per interpretare una singola istruzionee sorgente. In alternativa si può usare a compilazione dinamica, in cui si leggono interi blocchi di codice e li si traduce per la nuova architettura ottimizzandoli ed infine li si mette in esecuzione. Il vantaggio in termini di prestazioni è evidente. Il codice viene tradotto e ottimizzato e parti di codice possono essere bufferizzate per evitare di doverle ricompilare in seguito.
+
+5. Quali sono i più noti elaboratori?
+   
+   Tutti i più noti emulatori utilizzano la compilazione dinamica e tra loro troviamo QEMU, un SW che implementa un particolare sistema di emulaizone che permette di ottenere un'architettura nuova e disgiunta in un'altra che si occuperà di ospitarla permettendo di eseguire programmi compilati su architetture diverse, VirtualPC, Sw che consente a computer con SO MicWind o MacOSX di eseguire SO diversi anche in contemporanea, consentendo l'uso di applicazioni vecchie non più supportate che ha perso di rilevanza solo con l'introduzione di processori intel che ha reso disponibile l'ambiente virtuale dei PC basato su intel, e Mame, Sw per PC in grado di caricare ed eseguire il codice binario originale delle ROM dei videogiochi da bar (o arcade), emulando l'HW (addirittura può operare tramite interpretazione senza compromettere particolarmente le prestazioni).
+
+6. Cosa si intende con hypervisor?
+   
+   Il componente chiamato Virtual MAchine Monitore(VMM, o hypervisr) realizza il disaccoppiamento necessario per consentire la condivisione da parte di più macchine virtuali di una singola piattaforma HW. Queesto mediatore unico nelle interazioni tra VM e HW sottostante garantisce l'siolamento tra le VM e la stabilità del sistema.
+
+7. Qualisono le nozioni principali che si deve tenere a mente per realizzare un VMM?
+   
+   Il VMM deve offrire alle diverse macchine virtuali le risorse (virtuali) che sono necessarie per il loro funzionamento.: CPU, memoria e dispositivi I/O. I requisiti  da garantire (stando a popek e Goldberg) sono: un ambiente di esecuzione per i programmi sostanzialmente identico a quello della mcchiana reale (gli stesis programmi che eseguono sull'architettura non virtualizzata possono essere eseguiti nelle VM senza modifiche), un elevata efficienza nell'esecuzione dei programmi (quando possibile il VMM deve permettere l'esecuzione diretta delle istruzioni impartite dalle macchine virtuali: le istruzioni non privilegiate vengono eseguite direttamente in HW senza coinvolgere il VMM), e la stabilità e la sicurezza dell'intero sistema (il VMM deve sempre rimanere nel pieno controllo delle risorse HW: le MV non possono chiedere l'accesso all'HW in modo privilegiato).
+
+8. Quale è la differenza tra VMM di sistema e VMM ospitati?
+   
+   Nel VMM di sistema le funzionalità vengono integrate in un sistema operativo leggero posto direttamente sopra l'HW dell'elaboratore (ed è necessario corredare il VMM di tutti i driver necessari per pilotare le periferiche), mentre il  VMM ospitato  viene installato come un applicazione sopra un sistema operativo esistente: opera nello spazio utente e accede all'HW tramite le system call del SO su cui viene installato. L'installazione è più semplice e può fare riferimento al SO sottostante per la gestione delle periferiche e può utilizzare altri servizi del SO (scheduling e gestione dei dispositivi), a scapito delle performance.
+
+9. Cosa sono i ring di protezione?
+   
+   L'architettura della CPU prevede, in generale, almeno due livelli di protezione detti ring: supervisore o kernel (0) e utente (>0). Ad ogni ring corrispodnde un adiversa modalità di funzionamento del processore. Minore il livello maggiore è il privilegio. Al livello 0 si possono eseguire le istruzioni privilegiate della CPU; ad esmpio è chiaro che il kernel del SO che deve avere pieno controllo dell HW è progettato per eseguire al ring 0.
+
+10. Quali probalmatiche si possono incontrare nella realizzazione del VMM di sistema?
+    
+    In un sistema virtualizzato il VMM deve essere l'unica componente in grado di mantenere il controllo completo dell'HW. Al contrario il sistema operativo e le applicaizoni delle macchine virtuali operano in un ring superiore. Il ring deprivileging evidenzia il fatto che il SO della macchina virtuale esegue in un ring che non gli è prorio (esecuzione delle system call), mentre il ring compression evidenzia il fatto che con pochi ring, ad esempio solo due, si richia di eseguire allo stesso livello programmi che logicamente sono l'uno l'altrazione dell'altro, ci può essere ad esmpio scarsa protezione tra spazio di SO e di appplicaizoni dell guest.
+
+11. Quale è la classica soluzione al ring deprivileging?
+    
+    Quando il guest tenta di eseguire un istruzione privilegiata la CPU notifica un'eccezione al VMM (trap) e gli trasferisce il controllo, poi, Il VMM controlla la correttezza dell'operazione richiesta e ne emula il comportamento (emulate). Rimane sempre il principio cartine di non eseguire mai direttamente le istruzioni privilegiate.
+
+12. Cosa vuol dire che una architettura di una CPU può essere naturalmente virtualizzabile e quali sono le alternative?
+    
+    Una architettura naturalmente virtualizzabile (o con supporto nativo alla virtualizzazione) prevede l'invio di trap allo stato supervisore ogni istruzione privilegiata da un livello di protezione diverso dal supervisore. Chiaramente in questi casi la realizzazione del VMM è seplificata e si realizza più facilemente l'approccio trap-and-emulate e c'è supporto nativo all'esecuzione diretta. Purtroppo non tutte le architetture sono naturalmente virtualizzabili e in questi casi c'è l'ulteriore pproblema del ring aliasing; ovvero c'è il richio di inconsistenze legato agli accessi in lettura ad alcuni registri la cui gestione dovrebbe essere riservata al VMM da parte di chi eseguir in modalità user (esempio: registro CS contenente il CPL; il SO guest può capire di non essere sul ring 0). In questi casi è necessario ricorrere a soluzioni SW coem i fast binary translation o la paravirtualizzazione (modalità di dialogo alternativa alla virtualizzazione pura).
+
+13. Cosa si intende con fast binary translation?
+    
+    Il VMM scansiona dinamicamente il codce dei SO guest prima dell'esecuzione per sostituire a run time i blocchi contenenti istruzioni privilegiate in blocchi equivalenti dal punto di vista funzionale e contenenti chiamate al VMM. I blocchi tradotti sono eseguiti e conservati in cache per usi futuri. Questo meccanismo permette la virtualizzazione pura perchè ogni macchina virtuale è una esatta replica della macchina fisica e c'è possibilità di installare gli stessi SO della architettura non virtualizzata. Putroppo la traduzione è costosa.
+
+14. Cosa si intende con paravirtualizzazione?
+    
+    L'hypervisor offre al sistema operativo guest una interfaccia virtuale detta hypercall API alla quale i SO guest devono riferirsi per aver accesso alle risorse. I kernel dei SO guest devono essere modificati per avere accesso all'interfaccia dle particolare VMM e la struttura del VMM è semplificata perchè on deve più preoccuparsi di tradurre dinamicamente i tentativi di operazioni privilegiate dei SO guest e non vengono più generate interruzioni in corripspondenza di istruzioni proivilegiate dei SO guest, ma viene invocata la hypercall corrispondente. Complessivamente ci sono prestazioni migliori ma c'è necessità di porting dei SO guest, soluzione preclusa a molti sistemi operativi guest.
+
+15. Come è cambiata la gestione della prtezione nelle diverse generazioni di architettura x86?
+    
+    Nella prima generazione non aveva nessuna capactà di proteizone, non faceva cioè divverenza tra SO e applicazioni, girando ambedue con i massimi privilegi. Ovviamente non è corretto che le applicazioni possano interagire direttamente coi dispositivi di I/O o di allocare memoria senza l'intervento del SO. Viene introdotta la protezione come distinzione tra SO e applicazioni implementato coi ring di protezione. Nel registro CS i due bit meno significativi vengono riservati per rappresentare il livello corrente di privilegio. Si usa quindi anche la segmentazione rappresentando ogni segmento tramite il suo descrittore a cui sono associati il livello di proteizone richiesto e i permessi di accesso. Nonostante fossero disponibili 4 ring di protezione si è comunque scelto di usarene solo due epr garantire massim aportabilità verso SO con solo 2 ring. In particolare le due tecniche si gestione sono: 0/1/3, separando nettamente i ring di SO e applicazioni guest, 0/3/3, che si avvicina molto all emulazione.
+
+16. Cosa si intende con mancate eccezioni?
+    
+    E' possibile che nell'architettura x86 ci siano istruzioni privilegiate che, quando eseguite in user mode dal SO guest, non causano eccezione e non vengono catturate del trap, e sono ignorate (esmpio popf).
+
+17. 
+
 ## Protezione
 
 1. Quali sono le definizioni di protezione e di sicurezza, nel contesto dei sistemi operativi?
