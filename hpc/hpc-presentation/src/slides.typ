@@ -1,8 +1,7 @@
 #import "@preview/polylux:0.3.1"
 
-#import "german-dates.typ": semester, weekday
 #import "colors.typ": *
-#import "todo.typ": todo, list-todos, todo-state, hide-todos
+#import "dates.typ": semester, weekday
 #import "elements.typ": *
 
 #let uncover = polylux.uncover
@@ -13,29 +12,10 @@
         k.push("normal")
         k
     })
-
     polylux.polylux-slide(..args)
 }
 
-#let focus-slide(body) = {
-    set page(fill: purple)
-    set text(fill: white)
-
-    state("grape-suite-slides", ()).update(k => {
-        k.push("focus")
-        k
-    })
-
-    polylux.polylux-slide[
-        #set text(size: 1.5em, weight: "bold")
-        #show: align.with(center + horizon)
-        #v(-0.75em)
-        #body
-    ]
-}
-
 #let slides(
-    no: 0,
     series: none,
     title: none,
     topics: (),
@@ -45,6 +25,7 @@
     footer: none,
 
     author: none,
+    lecturer: none,
     email: none,
 
     page-numbering: (n, total) => {
@@ -54,6 +35,7 @@
 
     show-title-slide: true,
     show-author: true,
+    show-lecturer: true, 
     show-semester: true,
     show-date: true,
     show-outline: true,
@@ -61,82 +43,83 @@
     show-footer: true,
     show-page-numbers: true,
 
-    box-task-title: standard-box-translations.at("task"),
-    box-hint-title: standard-box-translations.at("hint"),
-    box-solution-title: standard-box-translations.at("solution"),
     box-definition-title: standard-box-translations.at("definition"),
-    box-notice-title: standard-box-translations.at("notice"),
     box-example-title: standard-box-translations.at("example"),
+    box-task-title: standard-box-translations.at("task"),
+    box-solution-title: standard-box-translations.at("solution"),
+    box-hint-title: standard-box-translations.at("hint"),
+    box-consequence-title: standard-box-translations.at("consequence"),
+    box-notice-title: standard-box-translations.at("notice"),
+    box-experiment-title: standard-box-translations.at("experiment"),
+    box-code-title: standard-box-translations.at("code"),
+    box-conclusion-title: standard-box-translations.at("conclusion"),
     sentence-supplement: "Example",
-
-    outline-title-text: "Outline",
 
     date: datetime.today(),
     body
 ) = {
-    let left-footer = if footer != none {
-        footer
-    } else {
-        text(size: 0.5em, (
-            if show-semester [#semester(short: true, date)],
-            [#series \##no],
-            title,
-            if show-author { author }).filter(e => e != none).join[ --- ]
-        )
-    }
-
+        set text(hyphenate: false)
+        let left-footer = if footer != none {
+            footer
+        } else {
+            text(size: 0.5em, (
+                if show-semester [#semester(short: true, date)],
+                [#series],
+                title,
+                if show-author { author },
+                if show-lecturer { lecturer }
+              ).filter(e => e != none).join[ -- ]
+            )
+        }
+    
     show footnote.entry: set text(size: 0.5em)
-
-    show heading: set text(fill: purple)
-
-    set text(size: 24pt, font: "Atkinson Hyperlegible")
+    
+    show heading: set text(fill: darkblue)
+    
+    set text(size: 24pt, font: "Consolas")
     set page(paper: "presentation-16-9",
         footer: {
             let fs = state("grape-suite-slides", ())
-
-            (context if show-footer and (not show-title-slide or here().page() > 1) {
-                set text(fill: if fs.at(here()).last() != none and fs.at(here()).last() == "normal" {
-                    purple.lighten(25%)
-                } else {
-                    blue.lighten(25%)
-                })
-
+            context {
+                set text(fill: black)
                 left-footer
-
                 h(1fr)
-
                 if show-page-numbers {
                     page-numbering(counter(page).at(here()), counter(page).final())
                 }
-            })
+            }
         }
     )
-
+    
     state("grape-suite-box-translations").update((
-        "task": box-task-title,
-        "hint": box-hint-title,
-        "solution": box-solution-title,
         "definition": box-definition-title,
-        "notice": box-notice-title,
         "example": box-example-title,
+        "task": box-task-title,
+        "solution": box-solution-title,
+        "hint": box-hint-title,
+        "cosequence": box-consequence-title,
+        "notice": box-notice-title,
+        "experiment": box-experiment-title,
+        "code": box-code-title,
+        "conclusion": box-conclusion-title,
     ))
-
+    
     state("grape-suite-element-sentence-supplement").update(sentence-supplement)
     show: sentence-logic
-
+    
     if show-title-slide {
         slide(align(horizon, [
             #block(inset: (left: 1cm, top: 3cm))[
                 #if head-replacement == none [
-                    #text(fill: purple, size: 2em, strong[#series ] + if no != none [\##no]) \
+                    #text(fill: darkblue, size: 2em, strong[#series ]) \
                 ] else { head-replacement }
-                //
                 #if title-replacement == none [
-                   #text(fill: purple.lighten(25%), strong(title))
+                    #text(fill: darkblue.lighten(25%), strong(title))
                 ] else { title-replacement }
-
+    
                 #set text(size: 0.75em)
                 #if show-author [#author #if email != none [--- #email ] \ ]
+                #if show-lecturer [#lecturer #if email != none [--- #email ] \ ]
                 #if show-semester [#semester(date) \ ]
                 #if show-date [#weekday(date.weekday()), #date.display("[day].[month].[year]")]
             ]
@@ -144,45 +127,13 @@
     }
 
     if show-outline {
-        set page(fill: purple, footer: context if show-footer {
-            set text(fill: if here().page() > 2 or not show-outline {
-                purple.lighten(25%)
-            } else {
-                blue.lighten(25%)
-            })
-
+        set page(fill: darkblue, footer: context if show-footer {
+            set text(fill: if here().page() > 2 or not show-outline { black } else {  white })
             left-footer
         })
-
-        slide[
-            #set text(fill: white)
-
-            #heading(outlined: false, text(fill: blue.lighten(25%), [#outline-title-text]))
-
-            #context {
-                let elems = query(selector(heading).after(here()))
-
-                enum(..elems
-                    .filter(e => e.level == 1 and e.outlined)
-                    .map(e => {
-                        e.body
-                    }))
-            }
-        ]
     }
-
-    if show-todolist {
-        context {
-            if todo-state.final().len() > 0 {
-                slide[
-                    #list-todos()
-                ]
-            }
-        }
-    }
-
     counter(page).update(1)
-
     set page(fill: white)
     body
 }
+
