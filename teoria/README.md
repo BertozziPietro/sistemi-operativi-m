@@ -72,13 +72,41 @@
     
     E' possibile che nell'architettura x86 ci siano istruzioni privilegiate che, quando eseguite in user mode dal SO guest, non causano eccezione e non vengono catturate del trap, e sono ignorate (esmpio popf).
 
-17. 
+17. Quali sono le operazioni di gestione delle macchine virtuali?
+    
+    Sono crezione, spegnimento, accensione, eliminazione e migrazione live. Tutte eseguite dal VMM.
+
+18. Quali sono gli stati in cui una macchina virtuale può trovarsi?
+    
+    Running o active quando la macchina è accesa e occcupa memoria nella ram del server sul quale è allocata. Inactive o powered off quando la macchina è spenta ed è rappresentata nel file system tramite un file immagine. Paused se la macchina è in attesa di un evento (come un I/O richiesto da un processo nell' ambiente guest). Suspended quando la macchina virtuale è stata sospesa dal VMM, il suo stato e le risorse utilizzate sono salvate nel file system (file immagine) e l'uscita dello stato di sospensione avviene tramite l'operazione resume da parte del VMM.
+
+19. Cosa si intende con migrazione live e perchè è utile?
+    
+    In datacenter di server virtualizzati è sempre più sentita la necessità di una gestione agile delle VM per far fronte a variazioni del carico in termini di load balancing e consolidamento, ma anche manutenzione online del server e gestione finalizzata al risparmio energetico, oltre che tolleranza ai guasti. Grazie alla migrazione live le macchine virtuali possono essere spostate da un server fisico ad un altro senza essere spente.
+
+20. Come le operazioni di ssuspende e resume permettono la migrazione live?
+    
+    Il VMM può mettere in stand-by una VM tramite l'operazione suspended e lo stato della macchina viene salvato in memoria secondaria. Una VM suspended può riprendere l'esecuzione, a partire dallo stato in cui si trova quando è stata sospesa tramite l'operazione resume. Lo stato viene ripristinato in memoria centrale. Poichè una VM è quasi completamente indipendente dal server fisico su cui è collocata. la resume può avvenire su un nodo diverso da quello in cui era prima della sospensione.
+
+21. Come si valuta la qualità delle implementazioni di migrazione live?
+    
+    E' desiderabile minimizzare: il downtime, il tempo di migrazione e il consumo di banda. Inoltre se il file system è condiviso non c'è bisogno di copiare il file immagine.
+
+22. Quali sono le fasi della soluzione precopy?
+    
+    Nella pre-migrazione si individuano la VM da migrare e l'host di destinazione. Poi nella reservation viene inizializzata una VM (container) sul server di destinazione. Durante la Pre-copia iterativa delle pagine viene eseguita una copia nell'host B di tutte le pagine allocate in memoria sull'host A per la VM da migrare e solo successivamente vengono copiate le dirty pages da A a B (quelle pagine che sono state modificate) fino a quando il numero di dirty pages è inferiore ad una soglia prestabilita. Poi si Sospende la VM e si copiano stato e dirty pages rimaste. Finalmente durante il commit s elimina la Vm dal server A e infine con la resume si attiva la VM nel server B.
+
+23. La soluzione post-copy in cosa differisce?
+    
+    La macchina viene sospesa e vengono copiate (non iterativamente) pagine e stato. Il tempo di migrazione è più basso ma il downtime è molto più elevato.
+
+24. 
 
 ## Protezione
 
 1. Quali sono le definizioni di protezione e di sicurezza, nel contesto dei sistemi operativi?
    
-   La protezione consiste nell'insieme di attività volte a garantire il controllo dell'accesso alle risorse logiche e fisiche da parte degli utenti, mentre la sicurezza riguarda l'insieme delle tecniche con le quali regolamentare l'accesso degli utenti al sistema di elaborazione. La sicurezza impedisce accessi non autorizzati al sistema e i conseguenti tentativi dolosi di alterazione e distruzione dei dati.
+   La protezione consiste nell'insieme di attività volte a garantire il controllo dell'accesso alle risorse logiche e fisiche da parte degli utenti, mentre la sicurezza riguarda l'insieme delle tecniche con le quali regolamentare l'accesso degli utenti al sistema di elaborazione. La sicurezza impedisce accessi non autorizzati al sistema e i conseguenti tentativi dolosi di alterazione e distruzione dei dati. In sintesi, la protezione riguarda il controllo degli accessi alle risorse interne al sistema mentre la sicurezza riguarda il controllo degli accessi al sistema.
 
 2. Quali sono i meccanismi di sicurezza?
    
@@ -86,7 +114,7 @@
 
 3. Quali concetti chiave è necessario introdurre per descrivere il controllo degli accessi ad un sistema?
    
-   E' necessario introdurre i concetti di: modelli, politiche e meccanismi. Un modello di protezione definisce i soggetti (attivi), gli oggetti (passivi) e i diritti di accesso dei soggetti (su oggetti o soggetti). Le politicha possono essere Discretional Access Control (DAC), Mandatory Access Control (MAC) o Role Based Access Control (RABC). I meccanismi di protezione sono gli strumenti che permettono di imporre una determinata politica e i principi sono la flessibilità del sistema di protezione e la separazione tra i meccanismi e le politiche.
+   E' necessario introdurre i concetti di: modelli, politiche e meccanismi. Un modello di protezione definisce i soggetti (attivi), gli oggetti (passivi) e i diritti di accesso dei soggetti (su oggetti o soggetti). Le politiche possono essere Discretional Access Control (DAC), Mandatory Access Control (MAC) o Role Based Access Control (RABC). I meccanismi di protezione sono gli strumenti che permettono di imporre una determinata politica e i principi sono la flessibilità del sistema di protezione e la separazione tra i meccanismi e le politiche.
 
 4. Come è definito un dominio di protezione e cosa si intende per oggetto condiviso?
    
@@ -130,7 +158,7 @@
 
 14. Nei sistemi ad elevata sicurezza, cosa garantisce il reference monitor?
     
-    Garantisce: mediazione completa, applicando le regole di sicurezza ad ogni accesso e non solo, isolamento proteggendo reference monitor e base di dati da modifiche non autorizzate,  e infine verificabilità delle precedenti.
+    Garantisce: mediazione completa, applicando le regole di sicurezza ad ogni accesso e non solo, isolamento proteggendo reference monitor e base di dati da modifiche non autorizzate, e infine verificabilità delle precedenti.
 
 15. Quali sono le principali categorie dell'Orange Book?
     
@@ -188,11 +216,148 @@
 
 ## Modello a Memoria Comune
 
+1. Quali sono le premesse del sistema a memoria comune?
+   
+   L'ambiente è globale e il sistema è visto come un insieme di processi attivi e risorse o oggetti passive/i. Le interazioni tra processi possono esssere di competizione o di cooperazione. Il modello rappresenta la maturale astrazione del funzionamento di un sistema in multiprogrammaizone costruito da uno o più processori che hanno accesso ad una memoria comune. Ad ogni processore può essere associata una memoria privata ma ogni interaizone avviene tramite oggetti in memoria comune. 
+
+2. Cosa si intende con risorsa?
+   
+   E' un qualunque oggetto, fisico o logico, di cui un processo necessità per portare a termine il suo compito. Le risorse sono raggruppate in classi; una classe identifica l'insieme di tutte e sole le operaizoni che un processo può eseguire per operare su risorse di quella classe. Ogni risorsa si identifica con una struttura dati allocata in memoria comune (anche risorse fisiche: descrittori del dispositivo).
+
+3. Cosa è il gestore di una risorsa e quali sono i suoi compiti?
+   
+   Per ogni risprsa R, il suo gestore definisce, in ogni istante t, l'insieme SR(t) dei processi che, in tale istante, hanno il diritto di operare su R. Si possono classificare in dedicate o condivise, alllocate staticamente o dinamicamente e private o comuni. Il gestore mantiene aggornato l'insieme SR(t) e cioè lo stato di allocazione di una risorsa, fornisce i meccanismi che un processo può utilizzare per acquisire il diritto di operare sulla risorsa, entrando a far parte dell'insieme SR(t), e per rilasciare tale diritto quando non è più necessario e implementare la strategia di allocaizone della risorsa e cioè definire quando, a chi, e per quanto tempo allocare la risorsa. Il gestore di una risorsa è una risorsa condivisa nel modello a memoria comune.
+
+4. Come si accede ad una risorsa allocata dinamicamente?
+   
+   E' necessario prevedere un gestore che implementa le funzioni di richiesta e rilascio della risorsa, rispettivamente prima e dopo aver eseguito le operazioni che necessitavano della risorsa.
+
+5. Come si accede ad una risorsa condivisa?
+   
+   E'necessario assocurarsi che gli accessi alla risorsa avvengano in modo non divisibile: le funzioni di accesso alla risorsa devono quindi essere programmate come classe di sezioni critiche (9utilizzando i meccanismi di sincronizzazione).
+
+6. Cosa si intende con  regione critica condizionale?
+   
+   E' un formalismo che permette di esprimere la specifica di un qualunque vincolo di sincronizzaizone. Il corpo della regione rappresenta un'operaizone da eseguire sulla risorsa condivisa e quindi costituise una sezione critica che deve essere eseguita in mutua esclusione con le altre operazioni definite su R.
+
+7. Quali sono i casi particolari di regioni critiche?
+   
+   ```c
+   //semplice mutua esclusione
+   region R << S; >>
+   
+   //semplice vincolo di sincronizzazione
+   region R << when(C) >>
+   
+   // specifica dello stato della risorsa per poter eseguire l'operazione
+   region R << when(C) S; >>
+   ```
+
+8. Cosa si intende con mutua esclusione e cosa sono le sezioni critiche?
+   
+   La condizione tale per cui le operazione con le quali i processi accedono alle variabili comuni non si sovrappongono nel tempo. La sequenza di istruzioni con le quali un processo accede e modifica un insieme di variabili comuni prende il nome di sezione critica. Ad un insieme di variabili comuni ppossono essere associate una sola sezione critica (usata da tutti i processi) o più sezioni critiche (classe di sezioni critiche). La regola di mutua esclusione stabilisce che: sezioni critiche appartenenti alla stessa classe devono escludersi mutualmente nel tempo oppure ad ogni istante può essere "in esecuzione" al più una sezione critica di ogni classe. La mutua esclusione prevede un prologo e un epilogo nl codice durante i quali la risorsa viene acquisita e liberata.
+
+9. Quali sono le possibili soluzioni al problema della mutua esclusione?
+   
+   Possono essere algoritmiche: come gli algoritmi di dekker e peterson o l'algoritmo del fornaio. Queste soluzioni implementano una attesa attiva. Possono essere HW based con disabilitazione delle interruzioni o con lock e unlock. Infine possono esssere di natura SW, realizzate coi semafori e coi derivati, in cui si sospendono effettivamente i processi in attesa.
+
 ## Nucleo Sistema Memoria Comune
 
-## Modello Scambio di Messaggi
+1. Come si mettono in evidenza le proprietà logiche di comunicazone e sincronizzazione tra processi senza doversi preoccupare degli aspetti implementativi delle particolari caratteristiche del processore fisico?
+   
+   In un sistema multiprogrammato vengono offerte tante unità di elaborazione astratte (macchine virtuali) quanti sono  i processi e ogni macchina possiede come set di istruzioni elementari quelle corrispondenti all'unità centrale reale più le istruzioni relative alla crezione ed eliminazione dei processi, al meccanismo con i dispositivi di I/O visti come processori esterni).
 
-## Comunicazione Sincronizzazione Estesa
+2. Di cosa si occupa il kernel?
+   
+   Si chiama kernel il modulo (o insieme di funzioni) realizzato in SW, HW o FW che supporta il concetto di processo e realizza gli strumenti necessari per la gestione dei processi. Costituisce il livello più interno di un qualunque sistema basato su processi concorrenti. E' il livello più elementare di un sistema operativo multiprogrammato e fornisce il supporto a tempo di esecuzione per un linguaggio per la programmazione concorrente. Il nucleo è il solo modulo conscio della esistenza delle interruzioni: i processi vengono sospesi grazie a specifiche primitive nel nucleo e viene risvegliato dopo che il nucleo ha ricevuto il segnale di interruzione da dispositivo e poi CPU. La gestione delle interruzioni è quindi invisibile ai processi ed ha come unico effetto rilevabile di rallentare la loro esecuzione sulle rispettive macchine virtuali.
+
+3. Cosa si intende con contessto,  salvataggio e ripristino del contesto?
+   
+   Il contesto di un processo è l'insieme delle informazioni contenute nei registri del processore, quando esso opera sotto il controllo del processo. Il salvataggio avviene quando il processo perde il controllo del processore, e il contenuto dei registri del processore (ovvero i contesto) viene salvato in una struttura dati associata al processo, chiamata descrittore. Infine il ripristino avviene quando un processo viene schedulato e i valori salvati nel suo descrittore vengono caricati nei registri del processore.
+
+4. Quali sono le funzioni del nucleo?
+   
+   Il compito fndamentale del nucleo di un sistema a processi è gestire le transizioni di stato dei processi. In particolare deve gestire il salvataggio e il ripristino dei contesti dei processi, scegliere a quale tra i processi pronti assegnare l'unità di elaborazione (scheduling CPU), gestire le interruzioni dei dispositivi esterni e infine realizzare i meccanismi di sincronizzazione dei processi.
+
+5. Quali sono le caratterictiche desiderabili del nucleo?
+   
+   Sono efficienza ottenuta anche con soluzioni HW e mediante microprogrammi (condiziona l'intera struttura), dimensioni ridotte anche frazie alla semplicità delle funzioni, e separazione tra politiche e meccanismi.
+
+6. Cosa è e cosa contiene un descrittore di un processo?
+   
+   Contiene l'identificatore del processo, lo stato del processo e la modalità di servizio (parametri di scheduling), ma anche il contesto del processo in temrini di contatore del programma, registri e indirizzo all'area di memoria privata del processo e infine contiene il riferimento a code (puntatore ad indirizzo successivo).
+
+7. Cosa sono le code dei processi pronti?
+   
+   Ci possono essere una o più code dei processi pronti( scheduling con priorità). Dato che non è detto che vi sia sempre almeno un processo pronto , la coda contiene sempre almeno un processo fittizzio (dummy process) che va in esecuzione solo quando tutte le altre code sono vuote. Ha priorità minima ed è sempre pronto. Ci sono puntatori ad entrambe le estremità del ìla coda per facilitare le due operazioni di inserimento e prelievo dei descrittori.
+
+8. Cosa è la coda dei descrittori liberi?
+   
+   E' la coda nella quale sono concatenati i descrittori disponibili per la creazione di nuovi processi e nella quale sono re-inseriti i descrittori dei processi terminati.
+
+9. Come fa il nucleo a sapere quale processo è in esecuzione?
+   
+   Questa informazione, rappresentata dall'indice del processo, viene contenuta in un aparticolare variabile del nucleo (spesso, un registro del processore).
+
+10. In che senso il nucleo è strutturato in due livelli?
+    
+    Il livello superiore contiene tutte le informazione direttamente utilizzabili dai processi sia interni isia esterni (dispositivi I/O); come le primitive per la creazione, eliminazione e sincronizzazione dei processi e le funzioni di risposta ai segnali di interruzione. Nel livello inferiore sono relizzate le funzionalità di cambio di contesto: salvataggio dello stato, sceduling o assegnazione della cpu e ripristino dello stato.
+
+11. Quali sono le accortezze a livello di sicurezza di nucleo?
+    
+    Le funzioni del nucleo sono le sole che possono operare s lle strutture dati che rappresentano lo stato del sistema e che possono utilizzare istruzioni privilegiate (comunicaizoni dispositivi e gestione interruzioni). Pertanto nucleo e processi eseguono in ambienti separati: il nucleo in kernel mode nel ring 0 e i processi in user mode nei ring positivi.
+
+12. Come si realizza il cambio ring e di privilegio?
+    
+    Nel caso di chiamate da processi esterni (dispositivi) si utilizza il meccanismo di risposta al segnale di interruzione (interruzione esterne), mentre nel caso di funzioni chiamate da processi interni, il passaggio è ottenuto tramite l'esecuzione di system calls o chiamate al supervisore (interruzioni esterne).
+
+13. Come viene gestito il temporizzatore?
+    
+    Per consentire la modalità di servizio a divisione di tempo è necessario che il nucleo gestisca un dispositivo temporizzatore tramite un'apposita procedura che ad intervalli di tempo fissati, provveda a sospendere il processo in esecuzione ed assegnare l'unità di elaborazione ad un altro processo (cambio di contesto).
+
+14. Come si può realizzare un semaforo in un sistema monoprocessore?
+    
+    Può essere implementato tramite una variabile intera che rappresenta il suo valore non negativo e da una coda di descrittori di processi in attesa sul semaforo. La coda viene gestita con un apolitica FIFO: i processi risultano oridnati secondo il loro tempo di arrivo nella coda associata al semaforo. IL descrittore di un processo viene inserito nella coda del semaforo come conseguenza di una primitiva p non passante; e poi prelevato per effetto di una v.
+
+15. Quali sono i due modelli di organizzaizone interna possibili nei sistemi operativi multiprocessore?
+    
+    Se il sistema operativo esegue su un architettura multiprocessore allora deve gestire una molteplicità di CPU, ogniuna delle quali può accedere alla stessa memoria condivisa. I due modelli sono: il modello SMP (Simmetric Multi Processing) e il modello a nuclei distinti.
+
+16. Cosa caratterizza il modello SMP?
+    
+    Nel modello SMP c'è un unica copia del nucleo del sistema operativo allocata nella memoria comuneche si occupa della gestione di tutte le risorse disponibili, comprese le CPU. Ogni processo può essere allocato su qualunque CPU ed è possibile che processi che eseguono su CPU diverse richiedano contemporaneamente funzioni del nucleo (System Call), e questa competizione tra le CPU per eseguire nel nucleo necessità di sincronizzazione.
+
+17. Come si può sincronizzare l'accesso al nucleo delle diverse CPU?
+    
+    Con la soluzione ad un solo lock, si garantisce la mutua esclusione in modo semplice, ma si limita il grado di parallelismo, escludento a priori ogni possibilità di esecuzione contemporanea. Con la soluzione a più lock invece si individuano all'interno del nucleo diverse classi  di sezioni critiche, ogniuna associata ad una struttura dai separata e sufficientemente indipendente dalle altre, e ad ogniuna viene associato un lock distinto.
+
+18. E' sempre la scelta migliore, in sistemi SMP, schedulare ogni processo su uno qualunque dei processori, per massimizzare il bilanciamento del carico?
+    
+    Può essere conveniente assegnare un processo ad un determinato processore perchè possono accedere velocemente alla loro memoria privata e potrebbe convenire schedulare il processo sul processore la cui memoria privata già contiene il suo codice o perchè in sistemi NUMA l'accesso alla memoria più vicina è più rapido e conviene quindi schedulare il processo sul processore più vicino alla memoria dove è allocato il suo spazio di indirizzamento. I processori hanno anche memoria cache e per ridurre l' overhead conviene schedulare un processo nel processore sul quale era stato precedentemente eseguito. Inoltre la scelta sulla politica di scheduling ha un impatto sul numero di code da gestire:  da una in tutto a una per CPU (nodo in questo caso).
+
+19. Cosa caratterizza il modello a nuclei distinti?
+    
+    Ogni nucleo è  dedicato alla gestione di una diversa specifica CPU. L'assunzione di base è che l'insieme dei processi che esseguiranno nel sistema sia partizionabile in sottoinsieme (nodi virtuali) lascamente connessi, cioè con un ridotto numero di interazioni reciproche. Ciascun nodo virtuale è assegnato ad un nodo fisico e tutte le strutture dati relative al nodo virtuale come i descrittori dei processi,  i semafori locali e le codee dei processi pronti, vengono allocate sulla memoria privata del nodo fisico.In questo modo tutte le interazioni solcali al nodo virtuale possono avvenire indipendentemente e concorrentemente a quelle di altri nodi virtuali, facendo riferimento al nucleo del nodo. E' fondamentale che solo le interazioni tra processi appartenenti a  nodi diversi utilizzanno la memoria comune.
+
+20. Quali sono i vantaggi di SMP e quali quelli di nuclei distiniti?
+    
+    Il primo permette un gestione ottimale delle risorse (miglior bilanciamento) mentre il secondoaumenta il grado di parallelismo (disaccoppiamento più basso e maggiore scalabilità).
+
+21. Quale è la differenza tra semafori privati e semafori condivisi?
+    
+    In un sistema multiprogrammato multiprocessore con modello a nuclei distinti i semafori privati riguardano un singolo nodo e vengono realizzati come nel caso monoprocessore, mentre i semafori condivisi tra i nodi sono utilizzati da processi appartenenti a nodi virtuali diversi. La memoria comune dovrà contenere tutte le informazioni relative ai semafori condivisi.
+
+22. Cosa è il rappresentante del processo?
+    
+    E' l'insieme minimo di informazioni sufficienti per identificare sia il nodo fisico su cui il processo opera, sia il descrittore contenuto nella memoria provata del processore.
+
+23. Come vengono realizzati i semafori condivisi?
+    
+    Ogni semaforo condiviso viene rappresentato nella memmoria comune da un interno non negativo e l'accesso al semaforo e protetto da un lock, anch'esso in memoria comune. Per ogni semaforo condiviso sono mantenute varie code: su ogni nodo è mantenuta una coda locale contenente i descrittori dei processi locali sospesi, e un ultima coda globale dei rappresentati di tutti i processi sospesi, accessibile solo dal nucleo.
+
+24. Perchè si parla di comunicazione tempestiva tra i nuclei?
+    
+    La comunicazione tra i nuclei deve essere tempestiva. Il nucleo che esegue la v deve interrospere qualsiasi cosa stia facendo per mandare un segnale di interruzioen al nucleo che si era sospeso con una p. Utilizza un buffer in memoria comune dove è presente la coda dei rappresentanti di S. Estrae quindi il descrittore dalla coda locale portando il processo nello stato ready.
 
 ## Implementazioni Concorrenza
 
