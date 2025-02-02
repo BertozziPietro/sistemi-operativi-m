@@ -359,6 +359,66 @@
     
     La comunicazione tra i nuclei deve essere tempestiva. Il nucleo che esegue la v deve interrospere qualsiasi cosa stia facendo per mandare un segnale di interruzioen al nucleo che si era sospeso con una p. Utilizza un buffer in memoria comune dove è presente la coda dei rappresentanti di S. Estrae quindi il descrittore dalla coda locale portando il processo nello stato ready.
 
+## Modello a Scambio di Messaggi
+
+1. Quali sono le caratteristiche del modello a scambio di messaggi?
+   
+   Ogni processo può accedere esclusivamente alle risorse allocate nella propria memoria locale. Ogni risorsa del sistema è accessibile direttamente ad un solo processo (gestore della risorsa). Se una risorsa è necessaria a più processi applicativi, ciascuno di questi processi clienti dovrà delegare l'unico processo che può operare sulla risorsa, processo gestore, all'esecuzione delle operazioni richieste. il gestore della risorsa coincide quindi con un processo server.
+
+2. Cosa è un canale di comunicazione e da quali parametri è caratterizzato?
+   
+   E' un collegamento logico mediante il quale due o più processi comunicano. Il nucleo della macchina concorrente realizza l'astrazione canale come meccanismo primitivo per lo scambio di informazioni. Poi il linguaggio di programmazione offre gli strumenti linguistici di alto livello per specificare i canali di comunicazione e utilizzarli per esprimere le interazioni tra i processi. I parametri che caratterizzano il concetto di canale sono: la direzione del flusso dei dati che un canale può trasferire, la designazione del canale e dei processi origine e destinatario e il tipo di sincronizzaizone.
+
+3. Come si possono classificare i canali?
+   
+   Possono essere monodirezionali o bidirezionali, possono essere link, port o mailbox,  possono favorire una comunicazione asincrona, sincrona o con sincronizzazione estesa.
+
+4. Quali sono le caratteristiche della comunicazione asincrona?
+   
+   Il processo mittente continua la sua esecuzione immediatamente dopo l'invio del messaggio: così facendo le informazioni ricevute non possono essere attribuite allo stato attuale del mittente. L'invio del messaggio non è un punto di sincronizzazione. C'è carenza espressiva e difficoltà nella verifica dei programmmi ma l'assenza di vincoli di sincronizzaizone favorisce il grado di concorrenza. Da un punto di vista realizzativo, sarebbe necessario un buffer di capacità illimitata, ma ovviamente un l'invio su un canale pieno è sospensivo.
+
+5. Quali sono le caratteristiche della comunicazione sincrona semplice?
+   
+   Il primo processo ad eseguire invio o ricezine si sospende in attesa che l'altro sia pronto ad eseguire l'operazione corrispondente: così facendo l'inzio è un punto di sincronizzaizone e ogni messaggio ricevuto contiene informazioni attribuibili allo stato attuale del processo mittente; sempificando scrittura e verifica dei programmi. Non è necessario bufferizzare.
+
+6. Quali sono le principali differenze tra le caratteristiche tra le comunicazioni asincrona e sincrona?
+   
+   La prima consente maggiore parallelismo, a scabilto della semploicità d'uso mentre le seconda è più espressiva ma le sospensioni possono peggiorare le performance.
+
+7. Come si può realizzare una comunicazione sincrona usando primitive asincrone?
+   
+   Mandando un messaggio di ack dopo dal processo ricevente al mittente.
+
+8. Quali sono le caratteristiche della comunicazione con sincronizzazione estesa?
+   
+   Si parte dal presupposto che ogni messaggio inviato rappresenta una richiesta al destinatario dell'esecuzione di una certa azione. Il processo mittente rimane in atetsa fino a che il ricevente non ha terminato di svolgere l'azione richiesta. Il punto di sincronizzaizone semplifica la verifica dei programmi anche se c'è riduzione del parallelismo. Il modello rimane client-servitore e c'è analogia semantica con la chiamata di procedura. Da notare  che in generale il server ha la possibilità di offrire diversi servizi e di conseguenza gestire diversi canali di ingresso. Nella sincronizzazione estesa quindi la recive non è bloccante anche se queso può introdurre attesa attiva.
+
+9. Quale è il meccanismo di ricezione ideale nella comunicaione con sincronizzaizone estesa?
+   
+   Deve consentire al processo server di verificare contemporaneamente la dispobilità di messaggi su più canali, abilitare la ricezione si un messaggio da un qualunque canale contenente messaggi e quando tutti i canali sono vuoti, bloaccar il processo in attesa che arrivi il  messaggio, qualunque sia il canale su cui arriva. Questo meccanismo è relizzabile tramite comandi id guardia?
+
+10. Cosa si intende con comando con guardia?
+    
+    ```c 
+    <espressione_booleana>; <recive> -> <istruzione>
+    ```
+    
+    La valutazione della guardia può fornire tre diversi valori: guardia fallita, guardia ritardata e guardia valida. Rispettivamente quando l'espressione booleana è falsa, quando l'espressione booleana ha valore true ma nel canale su cui viene eseguita non ci sono messaggi e quando l'espressione booleana ha valore true e nel canale c'è almeno un mesaggio (le receive esegue senza ritardi).
+
+11. Cosa si intende con comando con guardia alternativo?
+    
+    ```c
+    select {
+        [] <guardia_1> -> <istruzione_1>;
+        ...
+        [] <guardia_n> -> <istruzione_n>;
+    }
+    ```
+    
+    Il comando con guardia alternativo (select) racchiude un numero arbitrario di comandi con guardia semplice. Se una o più guardie sono valide viene scelto in maniera on deterministica uno dei rami con la guardia valida, se tutte le guardie non fallite sono ritardate il processo in esecuzione si sospende, mentre se tutte le guardie sono fallite allora il comando termina.
+
+## Sincronizzazione Estesa
+
 ## Implementazioni Concorrenza
 
 1. Cosa è una goroutine?
