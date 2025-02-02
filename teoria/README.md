@@ -261,6 +261,37 @@
    
    Possono essere algoritmiche: come gli algoritmi di dekker e peterson o l'algoritmo del fornaio. Queste soluzioni implementano una attesa attiva. Possono essere HW based con disabilitazione delle interruzioni o con lock e unlock. Infine possono esssere di natura SW, realizzate coi semafori e coi derivati, in cui si sospendono effettivamente i processi in attesa.
 
+10. Cosa è un semaforo?
+    
+    Un semaforo è uno strumento lingustico di basso livello che consente di risolvere qualsiasi problema di sincronizzazione nel modello a memoria comune. E' realizzato dal nucleo della macchina concorrente. L'eventuale attesa nell'esecuzione può essere realizzata utilizzando i meccanismi di gestione dei thread (sospensione, riattivazione) offerti dal nucleo ed è normalmente utilizzato per creare strumenti di sincronizzaizone di livello più alto. Di fatto un semaforo è una variabile intera non negativa alla quale è possibile accedere con le seguenti operazioni.
+    
+    ```c
+    void P(semaphore s):
+    region s << when(vals>0) vals--;>>
+    
+    void V(semaphore s):
+    region s << vals++;>>
+    ```
+    
+    Le due operazioni sono sezioni critiche da eseguire in mutua esclusione e in modo atomico.
+
+11. Cosa è la relazione di invarianza dei semafori?
+    
+    $$
+    val_s = l_s + nv_s - mp_s \newline
+np_s \le l_s + nv_s  
+    $$
+    
+    La relazione di invarianza è sempre soddisfatta, per ogni semaforo, qulunque sia il suo valore e comunque sia strutturato il programma concorrente che lo usa. E' quindi una safety propriety.
+
+12. Quali sono i casi principali di uno dei meccanismo dei semafori?
+    
+    Ci sono diversi casi d'uso classici dei semafori: mutua esclusione, evento, binari composti, condizione, risorsa e privati.
+
+13. Come si realizzano i semafori?
+    
+    In sistemioperativi multiprogrammati, il semaforo viene realizzato dal kernel, che , sfruttando i meccanismi di gestione dei processi (sospensione e riattivazione) elimina la possibilità di attesa attiva. E' possibili ridefinire la p e la v in modo diverso. La p controlla che i valore sia nulla e nel caso cambia contesto altrimenti lo diminuisce, mentre la v verifica che ci sia un processo bloccato da risvegliare, altrimenti aumenta il valore.
+
 ## Nucleo Sistema Memoria Comune
 
 1. Come si mettono in evidenza le proprietà logiche di comunicazone e sincronizzazione tra processi senza doversi preoccupare degli aspetti implementativi delle particolari caratteristiche del processore fisico?
@@ -399,7 +430,7 @@
 
 10. Cosa si intende con comando con guardia?
     
-    ```c 
+    ```c
     <espressione_booleana>; <recive> -> <istruzione>
     ```
     
@@ -417,7 +448,60 @@
     
     Il comando con guardia alternativo (select) racchiude un numero arbitrario di comandi con guardia semplice. Se una o più guardie sono valide viene scelto in maniera on deterministica uno dei rami con la guardia valida, se tutte le guardie non fallite sono ritardate il processo in esecuzione si sospende, mentre se tutte le guardie sono fallite allora il comando termina.
 
-## Sincronizzazione Estesa
+12. Cosa si intende con sistemi operativi distribuiti?
+    
+    Si tratta di un insieme di nodi tra loro omogenei e tutti dotati dello stesso sistema operativo (stesso nucleo). Lo scopo del sistema è quello di gestire tutte le risorse nascondando all'utente la loro distribuzione sulla rete.
+
+13. Cosa si sintende con sistemi operativi di rete?
+    
+    Si tratta di un insieme di nodi non eterogenei, con sistemi operativi diversi e autonomi, nodo per nodo. Ogni nodod della rete è in grado di offrire servizi a clienti remoti presenti su altri nodi della rete. La trasparenza della distribuzione delle risorse viene ottenuta mediante il middleware.
+
+14. Cosa si intende per pacchetti, interfaccie e canali nelle architetture distribuite?
+    
+    L'unità di trasmissione tra i nodi è il pacchetto. La struttura del pacchetto dipende dalla realizzazione (cioè dai protocolli di comunicaiozne adottati dalla rete). L'interfaccia di rete è strutturata in 2 parti (canali): uno per la trasmissione dei messaggi, uno per la ricezione. Il canale di trasmissione viene acceduto per realizzare l'invio dei pacchetti e ad esso sono associati una coda di pacchetti e un registro buffer della dimensione di un pacchetto. Il canale di ricezione viene acceduto per realizzare la ricezione dei pacchetti e ad esso è associato un registro buffer, nel quale viene depositato ogni pacchetto inviato al nodo. Tutto viene notificato tramite interruzioni al nucleo.
+
+## Comunicaiozne con Sincronizzazione Estesa
+
+1. Cosa caratterzza la sincronizzaizone estesa?
+   
+   E' un modello di comunicaizone e sincronizzaizone in cui il processo mittente richiede l'esecuzione di un servizio al processo destinatario e poi rimane sospeso fino al completamento del servizio richiesto. I processi rimangono sincronizzati durante l'esecuzione del servizio da parte del ricevente fino alla ricezione dei risulati da parte del mittente. Il meccanismo è anche noto come chiamata di procedura remota. C'è forte analogia semantica con una chimata di funzione, ma la differenza è che il servizio viene eseguito remotamente da un processo diverso dal chiamante.
+
+2. Quante diverse mplementazioni sono possibili?
+   
+   Sono possibili due diverse modalità di implementazone lato ricevante (server): ovvero la chiamata di procedura rempta (RPC) o il rendez-vous esteso.
+
+3. Come funziona la chiamata di procedura remota?
+   
+   ```c
+   call nome_del_modulo.op (<parametri attuali>);
+   ```
+   
+   Per ogni operazione che un processo client può richiedere viene dichiarata, lato server, una procedura. Per ogni richiesta di operazione al server viene creato un nuovo processo (thread) che ha il compito di eseguire la procedura corrispondente (con una fork). Naturalmente è possibile che più trhead concorrenti accedano a variabili interne, il che causa la necessità di sincronizzazione (monitor e semafori).
+
+4. Come funziona il rendez-vous esteso?
+   
+   ```c
+   accept <servizio>(in <par-ingresso>, out<par-uscita>) -> {S1, ..., S2}
+   call<server>.<servizio>(<parametri attuali>);
+   ```
+   
+   L'operazione richiesta viene specificata come un insieme di istruzioni che può comparire un punto qualunque del processo servitore. Il processo servitore utilizza un'istruzione di input (accept) che lo sospende in attesa di una richiesta dell'operazione. E' possibile che ad uno stesso servizio nel server siano associate più accept e quindi azioni diverse. Lo schema di comunicaizone realizzato dal meccanismo di randez-vous esteso è di tipo asimmetrico da molti ad uno.
+
+5. Quali sono le principali differenze tra RPC e rendez-vous esteso?
+   
+   Il primo rappresenta solo un meccanismo di ccomunicaizone tra i processi e la sincronizzazione è a carico del progframmatore. Il secondo combina comunicazione e sincronzzazione. Il processo servitore si sincronizza con il processo cliente quando esegue l'operazione di accept.
+
+6. Possono tornare utili i comandi con guardi anel randez-vous esteso?
+   
+   Sì, il server può selezionare le richieste da servire in base al suo stato interno.
+
+7. Come si possono selezionare le richieste in base ai parametri in ingresso?
+   
+   Non è possibile tramite la guardia di ingresso: è necessaria una doppia interazione tra il processo cliente e il processo servitore: prima si inviano i parametri e poi si chiede il servizio.
+
+8. A cosa servono i vettori di operazioni di servizio?
+   
+   Nell'ipotesi di un numero limitato di differenti richieste si può ottenere una semplice soluzione al problema associando ad ogni possibile richiesta una differente operazione (operaizone di servizio). Ciò è reso possibile in alcuni linguaggio di programmazione dalla possibilità di aggregare le richieste possibili in strutture di tipo vettore: il vettore delle operazioni di servizio.
 
 ## Implementazioni Concorrenza
 
