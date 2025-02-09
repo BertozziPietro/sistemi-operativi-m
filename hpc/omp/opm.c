@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
     // Calcolo delle dimensioni della matrice
     int dim = atoi(argv[1]);
     int dim_res = !(dim % 2) ? dim / 2 : (dim + 1) / 2;
-    int dim_frm = !(dim % 2) ? dim + 1 : dim + 2;
+    int dim_row = !(dim % 2) ? dim + 1 : dim + 2;
     int size = atoi(argv[2]);
     
     // Verifica che la dimensione sia valida
@@ -64,7 +64,7 @@ int main(int argc, char **argv) {
     }
     
     // Allocazione della matrice
-    float **m = create_matrix(dim_frm, (dim % 2));
+    float **m = create_matrix(dim_row, (dim % 2));
     float **r = malloc(dim * sizeof(float *));
     for (int i = 0; i < dim; i++)  r[i] = malloc(dim * sizeof(float));
     
@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 	}
 	
     /*
-    show_matrix(m, dim_frm);
+    show_matrix(m, dim_row);
     show_matrix(r, dim_res);	
     */
     
@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
     double end_computation = omp_get_wtime();
     
     // Liberazione della memoria allocata
-    free_matrix(m, dim_frm);
+    free_matrix(m, dim_row);
     free_matrix(r, dim_res);
     
     // Fine della misurazione del tempo totale

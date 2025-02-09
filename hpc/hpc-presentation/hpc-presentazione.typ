@@ -75,7 +75,7 @@
 
 #slide[
     = Analisi del Problema
-    #set text(size: 0.8em)
+    #set text(size: 0.9em)
 
     #solution[
         Ho scelto di suddividere il lavoro tra i processi (o thread) #unbreak[*delegando ad ogniuno il calcolo di una riga della matrice risultato*].
@@ -721,7 +721,7 @@
 
 #slide[
     = Legge di Amdahl
-    #set text(size: 0.8em)
+    #set text(size: 0.9em)
 
     La #unbreak[*legge di Amdahl*] descrive l'andamento dello speedup al variare del
     numero di processori impiegati per la soluzione dello stesso problema.
@@ -740,16 +740,16 @@
     #grid(
         columns: (1fr, 1fr),
         gutter: 20pt,
-        [#image("/src/MPI_strong.jpg", width: 100%)],
-        [#image("/src/OpenMP_strong.jpg", width: 100%)]
+        [#image("/src/MPI_strong.png", width: 90%)],
+        [#image("/src/OMP_strong.png", width: 90%)]
     )
 ]
 
 #slide[
     = Legge di Gustafson
-    #set text(size: 0.8em)
+    #set text(size: 0.9em)
 
-    La #unbreak[*legge di Gustafson*] descrive l'andamento dello speedup scalato mantenendo costante il carico di ogni processore e aumentandonoil numero per risolvere problemi di dimensioni maggiori.
+    La #unbreak[*legge di Gustafson*] descrive l'andamento dello speedup scalato mantenendo costante il carico di ogni processore e aumentandone il numero per risolvere problemi di dimensioni maggiori.
 
     Lo speedup scalato dipende dalla frazione del programma che può essere parallelizzata (r) e dal numero di processori utilizzati (p). #unbreak[*Non c'è un limite*] a quanto lo speedup scalato possa crescere.
     
@@ -760,25 +760,38 @@
 
 #slide[
     = Confronti tra Modelli di Interazione
-    #set text(size: 0.8em)
+    #set text(size: 0.9em)
     
     #grid(
         columns: (1fr, 1fr),
         gutter: 20pt,
-        [#image("/src/MPI_weak.jpg", width: 100%)],
-        [#image("/src/OpenMP_weak.jpg", width: 100%)]
+        [#image("/src/MPI_weak.png", width: 90%)],
+        [#image("/src/OMP_weak.png", width: 90%)]
     )
 ]
 
 #slide[
-    = Conclusioni
+    = Conclusioni 1
     #set text(size: 0.8em)
     
     #conclusion[
         E'evidente che la soluzione basata sul #unbreak[*modello di interazione a scambio di messaggi non scala correttamente*], mentre la soluzione basata sul #unbreak[*modello di interazione a memoria comune, soddisfa appieno le aspettative*].
     ]
 
+    #notice[
+        Se, a posteriori, cercando il motivo dei risultai, si ripete l'esperimento, questa volta misurando il tempo di calcolo escludendo le operazioni di distrubuzione e raccolta dei dati, sembra invece che il programma sia scalabile. #unbreak[*La distribuzione del carico e la raccolta dei risultati parziali è più lenta del previsto*].
+    ]
+]
+
+#slide[
+    = Conclusioni 2
+    #set text(size: 0.8em)
+    
+    #conclusion[
+        Nel modello a scambio di messaggi il #unbreak[*tempo guadagnato parallelizzando*] il calcolo è simile al #unbreak[*tempo perso per disribuire il carico*] tra i processi.
+    ]
+
     #hint[
-        #unbreak[*La distribuzione del carico e la raccolta dei risultati pariali è più lenta del previsto*]. Forse se i processi si organizzassero in una gerarchia si potrebbe mitigare l'effetto di questo collo di bottiglia.
+        Per mitigare questo fenomeno, specialmente se si utilizzano molti processi, si può pensare di organizzarli in una #unbreak[*struttura gerarchica*] di modo da non rendere il processo master il collo di bottglia. Il master ditrubuirebbe quindi il lavoro solo a #unbreak[*pochi processi leader*], che a loro volta lo smisterebbero ad altri processi.
     ]
 ]

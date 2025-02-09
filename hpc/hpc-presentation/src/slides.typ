@@ -108,6 +108,7 @@
     show: sentence-logic
     
     if show-title-slide {
+        show-outline = false
         slide(align(horizon, [
             #block(inset: (left: 1cm, top: 3cm))[
                 #if head-replacement == none [
