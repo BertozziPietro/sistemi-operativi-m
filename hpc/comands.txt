@@ -1,8 +1,0 @@
-step ca bootstrap --ca-url=https://sshproxy.hpc.cineca.it --fingerprint 2ae1543202304d3f434bdc1a2c92eff2cd2b02110206ef06317e70c1c1735ecd
-
-step ssh login pietro.bertozzi@studio.unibo.it --provisioner cineca-hpc
-
-ssh pbertozz0@login.g100.cineca.it
-
-ssh-keygen -f '/home/kali/.ssh/known_hosts' -R 'login.g100.cineca.it'
-
